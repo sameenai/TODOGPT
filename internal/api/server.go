@@ -55,6 +55,13 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("/", s.handleDashboard)
 }
 
+// Handler returns the HTTP handler for testing.
+func (s *Server) Handler() http.Handler {
+	go s.wsHub.Run()
+	go s.bridgeUpdates()
+	return s.withCORS(s.mux)
+}
+
 func (s *Server) Start() error {
 	// Start WebSocket hub
 	go s.wsHub.Run()
