@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Briefing Dashboard</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-left">
+            <h1 class="header-title">Daily Briefing</h1>
+            <span class="header-date" id="header-date"></span>
+        </div>
+        <div class="header-right">
+            <div class="connection-status">
+                <span class="status-dot" id="ws-status"></span>
+                <span id="ws-label">Connecting...</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="score-row" id="score-row">
+        <div class="score-card">
+            <div class="score-icon email">&#9993;</div>
+            <div class="score-info">
+                <h4 id="score-emails">-</h4>
+                <p>Unread Emails</p>
+            </div>
+        </div>
+        <div class="score-card">
+            <div class="score-icon slack">&#9993;</div>
+            <div class="score-info">
+                <h4 id="score-slack">-</h4>
+                <p>Slack Messages</p>
+            </div>
+        </div>
+        <div class="score-card">
+            <div class="score-icon github">&#128736;</div>
+            <div class="score-info">
+                <h4 id="score-github">-</h4>
+                <p>GitHub Notifs</p>
+            </div>
+        </div>
+        <div class="score-card">
+            <div class="score-icon calendar">&#128197;</div>
+            <div class="score-info">
+                <h4 id="score-events">-</h4>
+                <p>Events Today</p>
+            </div>
+        </div>
+        <div class="score-card">
+            <div class="score-icon todo">&#9745;</div>
+            <div class="score-info">
+                <h4 id="score-todos">-</h4>
+                <p>Action Items</p>
+            </div>
+        </div>
+        <div class="score-card">
+            <div class="score-icon inbox">&#127919;</div>
+            <div class="score-info">
+                <h4 id="score-inbox-zero">--%</h4>
+                <p>Inbox Zero Score</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard">
+        <!-- Column 1: Calendar + Weather -->
+        <div class="col">
+            <!-- Weather -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>&#9925; Weather</h3>
+                </div>
+                <div class="weather-content" id="weather-content">
+                    <div class="weather-temp" id="weather-temp">--°</div>
+                    <div>
+                        <div id="weather-desc" style="font-size:16px; font-weight:500;">Loading...</div>
+                        <div class="weather-details" id="weather-details"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Calendar -->
+            <div class="card" style="margin-top:16px;">
+                <div class="card-header">
+                    <h3>&#128197; Calendar</h3>
+                    <span class="card-badge" id="event-count">0</span>
+                </div>
+                <div class="card-body" id="events-list">
+                    <div class="empty-state">Loading events...</div>
+                </div>
+            </div>
+
+            <!-- News -->
+            <div class="card" style="margin-top:16px;">
+                <div class="card-header">
+                    <h3>&#128240; Top News</h3>
+                </div>
+                <div class="card-body" id="news-list">
+                    <div class="empty-state">Loading news...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Column 2: Signals feed -->
+        <div class="col">
+            <!-- Email -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>&#9993; Email</h3>
+                    <span class="card-badge" id="email-count">0</span>
+                </div>
+                <div class="card-body" id="email-list">
+                    <div class="empty-state">Loading emails...</div>
+                </div>
+            </div>
+
+            <!-- Slack -->
+            <div class="card" style="margin-top:16px;">
+                <div class="card-header">
+                    <h3>&#128172; Slack</h3>
+                    <span class="card-badge" id="slack-count">0</span>
+                </div>
+                <div class="card-body" id="slack-list">
+                    <div class="empty-state">Loading messages...</div>
+                </div>
+            </div>
+
+            <!-- GitHub -->
+            <div class="card" style="margin-top:16px;">
+                <div class="card-header">
+                    <h3>&#128736; GitHub</h3>
+                    <span class="card-badge" id="github-count">0</span>
+                </div>
+                <div class="card-body" id="github-list">
+                    <div class="empty-state">Loading notifications...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Column 3: Todos + Inbox Zero -->
+        <div class="col todo-panel">
+            <!-- Inbox Zero Progress -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>&#127919; Inbox Zero Progress</h3>
+                </div>
+                <div class="inbox-zero" id="inbox-zero-progress">
+                    <div class="progress-row">
+                        <span class="progress-label">Email</span>
+                        <div class="progress-bar"><div class="progress-fill email" id="prog-email" style="width:0%"></div></div>
+                        <span class="progress-value" id="prog-email-val">0%</span>
+                    </div>
+                    <div class="progress-row">
+                        <span class="progress-label">Slack</span>
+                        <div class="progress-bar"><div class="progress-fill slack" id="prog-slack" style="width:0%"></div></div>
+                        <span class="progress-value" id="prog-slack-val">0%</span>
+                    </div>
+                    <div class="progress-row">
+                        <span class="progress-label">GitHub</span>
+                        <div class="progress-bar"><div class="progress-fill github" id="prog-github" style="width:0%"></div></div>
+                        <span class="progress-value" id="prog-github-val">0%</span>
+                    </div>
+                    <div class="progress-row">
+                        <span class="progress-label">Tasks</span>
+                        <div class="progress-bar"><div class="progress-fill todos" id="prog-todos" style="width:0%"></div></div>
+                        <span class="progress-value" id="prog-todos-val">0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pomodoro Timer -->
+            <div class="card" style="margin-top:16px;">
+                <div class="card-header">
+                    <h3>&#9201; Focus Timer</h3>
+                </div>
+                <div class="pomodoro">
+                    <div class="pomodoro-timer" id="pomodoro-display">25:00</div>
+                    <div class="pomodoro-controls">
+                        <button class="pomodoro-btn" id="pomo-start" onclick="togglePomodoro()">Start</button>
+                        <button class="pomodoro-btn" onclick="resetPomodoro()">Reset</button>
+                        <button class="pomodoro-btn" onclick="skipPomodoro()">Skip</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interactive Todo List -->
+            <div class="card" style="margin-top:16px;">
+                <div class="card-header">
+                    <h3>&#9745; Action Items</h3>
+                    <span class="card-badge" id="todo-count">0</span>
+                </div>
+                <div class="todo-input-area">
+                    <div class="todo-input-row">
+                        <input type="text" class="todo-input" id="todo-input" placeholder="Add a task..." onkeypress="if(event.key==='Enter')addTodo()">
+                        <button class="todo-add-btn" onclick="addTodo()">Add</button>
+                    </div>
+                </div>
+                <div class="todo-filters">
+                    <button class="todo-filter active" data-filter="all" onclick="filterTodos('all', this)">All</button>
+                    <button class="todo-filter" data-filter="pending" onclick="filterTodos('pending', this)">Pending</button>
+                    <button class="todo-filter" data-filter="done" onclick="filterTodos('done', this)">Done</button>
+                    <button class="todo-filter" data-filter="urgent" onclick="filterTodos('urgent', this)">Urgent</button>
+                </div>
+                <div class="card-body" id="todo-list" style="max-height:500px;">
+                    <div class="empty-state">Loading tasks...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

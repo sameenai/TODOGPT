@@ -1,0 +1,10 @@
+bin/
+*.exe
+*.test
+*.out
+config.json
+token.json
+credentials.json
+.env
+*.log
+.daily-briefing/

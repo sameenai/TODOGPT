@@ -1,0 +1,41 @@
+run:
+  timeout: 5m
+  go: "1.21"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - gosimple
+    - gocritic
+
+linters-settings:
+  errcheck:
+    check-blank: false
+    exclude-functions:
+      - (net/http.ResponseWriter).Write
+      - fmt.Fprintf
+      - fmt.Printf
+      - fmt.Println
+  gocritic:
+    disabled-checks:
+      - ifElseChain
+      - singleCaseSwitch
+
+issues:
+  exclude-rules:
+    # Allow unused parameters in HTTP handlers (required by interface)
+    - linters:
+        - revive
+      text: "unused-parameter"
+    # Allow unchecked errors in test files
+    - path: _test\.go
+      linters:
+        - errcheck
+    # Allow unchecked errors for json.NewEncoder().Encode in handlers
+    - linters:
+        - errcheck
+      text: "Error return value of .json.NewEncoder"
