@@ -58,6 +58,20 @@ func TestNewsGetCachedAfterFetch(t *testing.T) {
 	}
 }
 
+func TestNewsFetchDefaultMaxItems(t *testing.T) {
+	svc := NewNewsService(config.NewsConfig{
+		MaxItems: 0, // Should default to 10
+	})
+
+	items, err := svc.Fetch()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(items) == 0 {
+		t.Error("expected news items with default max items")
+	}
+}
+
 func TestNewsMockDataContent(t *testing.T) {
 	svc := NewNewsService(config.NewsConfig{MaxItems: 5})
 	items := svc.mockNews()

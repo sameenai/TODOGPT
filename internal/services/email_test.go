@@ -98,3 +98,15 @@ func TestEmailMockHasLabels(t *testing.T) {
 		}
 	}
 }
+
+func TestEmailGetCachedAfterFetch(t *testing.T) {
+	svc := NewEmailService(config.EmailConfig{})
+	svc.Fetch()
+	cached := svc.GetCached()
+	if len(cached) == 0 {
+		t.Error("expected cached emails after fetch")
+	}
+	if cached[0].ID == "" {
+		t.Error("cached email should have an ID")
+	}
+}

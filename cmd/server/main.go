@@ -12,25 +12,33 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "", "Path to config file")
-	port := flag.Int("port", 0, "Override server port")
-	initConfig := flag.Bool("init", false, "Generate default config file")
-	flag.Parse()
+	if err := run(os.Args[1:]); err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+}
+
+func run(args []string) error {
+	fs := flag.NewFlagSet("server", flag.ContinueOnError)
+	configPath := fs.String("config", "", "Path to config file")
+	port := fs.Int("port", 0, "Override server port")
+	initConfig := fs.Bool("init", false, "Generate default config file")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	if *initConfig {
 		cfg := config.DefaultConfig()
 		if err := cfg.Save(*configPath); err != nil {
-			fmt.Fprintf(os.Stderr, "Error saving config: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("error saving config: %w", err)
 		}
 		fmt.Println("Default config saved. Edit ~/.daily-briefing/config.json to add your API keys.")
-		return
+		return nil
 	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Config error: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("config error: %w", err)
 	}
 
 	if *port > 0 {
@@ -47,7 +55,5 @@ func main() {
 	log.Printf("Starting Daily Briefing Dashboard...")
 	log.Printf("Open http://%s:%d in your browser", cfg.Server.Host, cfg.Server.Port)
 
-	if err := server.Start(); err != nil {
-		log.Fatalf("Server error: %v", err)
-	}
+	return server.Start()
 }

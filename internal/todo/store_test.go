@@ -1,6 +1,7 @@
 package todo
 
 import (
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -219,6 +220,34 @@ func TestPersistence(t *testing.T) {
 	}
 	if s2.Get("persist-1").Title != "Persisted" {
 		t.Errorf("expected title 'Persisted', got %q", s2.Get("persist-1").Title)
+	}
+}
+
+func TestLoadInvalidJSONFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "bad-todos.json")
+	os.WriteFile(path, []byte("not valid json{{{"), 0600)
+
+	s, err := NewStore(path)
+	if err != nil {
+		t.Fatalf("NewStore should handle invalid JSON gracefully: %v", err)
+	}
+	items := s.All()
+	if len(items) != 0 {
+		t.Errorf("expected empty items for invalid JSON, got %d", len(items))
+	}
+}
+
+func TestNewStoreMkdirAllError(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Create a FILE where the .daily-briefing directory would be,
+	// so MkdirAll fails when NewStore("") tries to create it.
+	os.WriteFile(filepath.Join(tmpDir, ".daily-briefing"), []byte("file"), 0600)
+	t.Setenv("HOME", tmpDir)
+
+	_, err := NewStore("")
+	if err == nil {
+		t.Error("expected error when .daily-briefing exists as a file")
 	}
 }
 
