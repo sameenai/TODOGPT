@@ -111,16 +111,16 @@ func (s *TodoService) GenerateFromBriefing(b *models.Briefing) {
 		}
 
 		s.items = append(s.items, models.TodoItem{
-			ID:        fmt.Sprintf("todo-email-%s", email.ID),
-			Title:     fmt.Sprintf("Reply: %s", email.Subject),
+			ID:          fmt.Sprintf("todo-email-%s", email.ID),
+			Title:       fmt.Sprintf("Reply: %s", email.Subject),
 			Description: fmt.Sprintf("From: %s", email.From),
-			Priority:  priority,
-			Status:    models.TodoPending,
-			Source:    "email",
-			SourceID:  email.ID,
-			Tags:      email.Labels,
-			CreatedAt: email.Date,
-			UpdatedAt: time.Now(),
+			Priority:    priority,
+			Status:      models.TodoPending,
+			Source:      "email",
+			SourceID:    email.ID,
+			Tags:        email.Labels,
+			CreatedAt:   email.Date,
+			UpdatedAt:   time.Now(),
 		})
 	}
 
@@ -150,16 +150,16 @@ func (s *TodoService) GenerateFromBriefing(b *models.Briefing) {
 		}
 
 		s.items = append(s.items, models.TodoItem{
-			ID:        fmt.Sprintf("todo-slack-%d", i),
-			Title:     title,
+			ID:          fmt.Sprintf("todo-slack-%d", i),
+			Title:       title,
 			Description: truncate(msg.Text, 200),
-			Priority:  priority,
-			Status:    models.TodoPending,
-			Source:    "slack",
-			SourceID:  sourceID,
-			Tags:      []string{msg.Channel},
-			CreatedAt: msg.Timestamp,
-			UpdatedAt: time.Now(),
+			Priority:    priority,
+			Status:      models.TodoPending,
+			Source:      "slack",
+			SourceID:    sourceID,
+			Tags:        []string{msg.Channel},
+			CreatedAt:   msg.Timestamp,
+			UpdatedAt:   time.Now(),
 		})
 	}
 

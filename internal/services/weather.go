@@ -12,9 +12,9 @@ import (
 )
 
 type WeatherService struct {
-	cfg    config.WeatherConfig
-	cache  *models.Weather
-	mu     sync.RWMutex
+	cfg   config.WeatherConfig
+	cache *models.Weather
+	mu    sync.RWMutex
 }
 
 func NewWeatherService(cfg config.WeatherConfig) *WeatherService {

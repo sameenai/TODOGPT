@@ -43,14 +43,14 @@ func (s *CalendarService) mockEvents() []models.CalendarEvent {
 
 	return []models.CalendarEvent{
 		{
-			ID:        "evt-1",
-			Title:     "Morning Standup",
-			StartTime: today.Add(9 * time.Hour),
-			EndTime:   today.Add(9*time.Hour + 15*time.Minute),
-			Location:  "Zoom",
+			ID:         "evt-1",
+			Title:      "Morning Standup",
+			StartTime:  today.Add(9 * time.Hour),
+			EndTime:    today.Add(9*time.Hour + 15*time.Minute),
+			Location:   "Zoom",
 			MeetingURL: "https://zoom.us/j/example",
-			Attendees: []string{"team@company.com"},
-			Source:    "google_calendar",
+			Attendees:  []string{"team@company.com"},
+			Source:     "google_calendar",
 		},
 		{
 			ID:          "evt-2",
@@ -80,12 +80,12 @@ func (s *CalendarService) mockEvents() []models.CalendarEvent {
 			Source:      "google_calendar",
 		},
 		{
-			ID:        "evt-5",
-			Title:     "1:1 with Manager",
-			StartTime: today.Add(16 * time.Hour),
-			EndTime:   today.Add(16*time.Hour + 30*time.Minute),
+			ID:         "evt-5",
+			Title:      "1:1 with Manager",
+			StartTime:  today.Add(16 * time.Hour),
+			EndTime:    today.Add(16*time.Hour + 30*time.Minute),
 			MeetingURL: "https://zoom.us/j/example2",
-			Source:    "google_calendar",
+			Source:     "google_calendar",
 		},
 	}
 }

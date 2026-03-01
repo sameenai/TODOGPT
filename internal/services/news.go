@@ -63,7 +63,10 @@ func (s *NewsService) Fetch() ([]models.NewsItem, error) {
 
 	var items []models.NewsItem
 	for _, a := range apiResp.Articles {
-		pubTime, _ := time.Parse(time.RFC3339, a.PublishedAt)
+		pubTime, err := time.Parse(time.RFC3339, a.PublishedAt)
+		if err != nil {
+			pubTime = time.Now()
+		}
 		items = append(items, models.NewsItem{
 			Title:       a.Title,
 			Description: a.Description,

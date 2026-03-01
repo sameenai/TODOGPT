@@ -26,12 +26,12 @@ type ServerConfig struct {
 }
 
 type WeatherConfig struct {
-	APIKey   string  `json:"api_key"`
-	City     string  `json:"city"`
-	Units    string  `json:"units"`
-	Lat      float64 `json:"lat"`
-	Lon      float64 `json:"lon"`
-	Enabled  bool    `json:"enabled"`
+	APIKey  string  `json:"api_key"`
+	City    string  `json:"city"`
+	Units   string  `json:"units"`
+	Lat     float64 `json:"lat"`
+	Lon     float64 `json:"lon"`
+	Enabled bool    `json:"enabled"`
 }
 
 type NewsConfig struct {
@@ -49,10 +49,10 @@ type GoogleConfig struct {
 }
 
 type SlackConfig struct {
-	BotToken    string   `json:"bot_token"`
-	AppToken    string   `json:"app_token"`
-	Channels    []string `json:"channels"`
-	Enabled     bool     `json:"enabled"`
+	BotToken string   `json:"bot_token"`
+	AppToken string   `json:"app_token"`
+	Channels []string `json:"channels"`
+	Enabled  bool     `json:"enabled"`
 }
 
 type EmailConfig struct {
@@ -70,11 +70,11 @@ type GitHubConfig struct {
 }
 
 type JiraConfig struct {
-	BaseURL  string `json:"base_url"`
-	Email    string `json:"email"`
-	Token    string `json:"api_token"`
-	Project  string `json:"project"`
-	Enabled  bool   `json:"enabled"`
+	BaseURL string `json:"base_url"`
+	Email   string `json:"email"`
+	Token   string `json:"api_token"`
+	Project string `json:"project"`
+	Enabled bool   `json:"enabled"`
 }
 
 type NotionConfig struct {

@@ -4,14 +4,14 @@ import "time"
 
 // Weather represents current weather data.
 type Weather struct {
-	City        string  `json:"city"`
-	Temperature float64 `json:"temperature"`
-	FeelsLike   float64 `json:"feels_like"`
-	Humidity    int     `json:"humidity"`
-	Description string  `json:"description"`
-	Icon        string  `json:"icon"`
-	WindSpeed   float64 `json:"wind_speed"`
-	Units       string  `json:"units"`
+	City        string    `json:"city"`
+	Temperature float64   `json:"temperature"`
+	FeelsLike   float64   `json:"feels_like"`
+	Humidity    int       `json:"humidity"`
+	Description string    `json:"description"`
+	Icon        string    `json:"icon"`
+	WindSpeed   float64   `json:"wind_speed"`
+	Units       string    `json:"units"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
@@ -65,26 +65,26 @@ type EmailMessage struct {
 
 // GitHubNotification represents a GitHub notification.
 type GitHubNotification struct {
-	ID         string    `json:"id"`
-	Title      string    `json:"title"`
-	Repo       string    `json:"repo"`
-	Type       string    `json:"type"`
-	URL        string    `json:"url"`
-	Reason     string    `json:"reason"`
-	Unread     bool      `json:"unread"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID        string    `json:"id"`
+	Title     string    `json:"title"`
+	Repo      string    `json:"repo"`
+	Type      string    `json:"type"`
+	URL       string    `json:"url"`
+	Reason    string    `json:"reason"`
+	Unread    bool      `json:"unread"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // JiraTicket represents a Jira issue.
 type JiraTicket struct {
-	Key         string    `json:"key"`
-	Summary     string    `json:"summary"`
-	Status      string    `json:"status"`
-	Priority    string    `json:"priority"`
-	Assignee    string    `json:"assignee"`
-	DueDate     time.Time `json:"due_date"`
-	URL         string    `json:"url"`
-	Type        string    `json:"type"`
+	Key      string    `json:"key"`
+	Summary  string    `json:"summary"`
+	Status   string    `json:"status"`
+	Priority string    `json:"priority"`
+	Assignee string    `json:"assignee"`
+	DueDate  time.Time `json:"due_date"`
+	URL      string    `json:"url"`
+	Type     string    `json:"type"`
 }
 
 // TodoItem represents a task in the interactive todo list.
@@ -155,18 +155,18 @@ func (s TodoStatus) String() string {
 
 // Briefing is the aggregate morning briefing.
 type Briefing struct {
-	Date            time.Time            `json:"date"`
-	Weather         *Weather             `json:"weather"`
-	Events          []CalendarEvent      `json:"events"`
-	News            []NewsItem           `json:"news"`
-	UnreadEmails    []EmailMessage       `json:"unread_emails"`
-	SlackMessages   []SlackMessage       `json:"slack_messages"`
-	GitHubNotifs    []GitHubNotification `json:"github_notifications"`
-	JiraTickets     []JiraTicket         `json:"jira_tickets"`
-	Todos           []TodoItem           `json:"todos"`
-	EmailCount      int                  `json:"email_count"`
-	SlackUnread     int                  `json:"slack_unread"`
-	GeneratedAt     time.Time            `json:"generated_at"`
+	Date          time.Time            `json:"date"`
+	Weather       *Weather             `json:"weather"`
+	Events        []CalendarEvent      `json:"events"`
+	News          []NewsItem           `json:"news"`
+	UnreadEmails  []EmailMessage       `json:"unread_emails"`
+	SlackMessages []SlackMessage       `json:"slack_messages"`
+	GitHubNotifs  []GitHubNotification `json:"github_notifications"`
+	JiraTickets   []JiraTicket         `json:"jira_tickets"`
+	Todos         []TodoItem           `json:"todos"`
+	EmailCount    int                  `json:"email_count"`
+	SlackUnread   int                  `json:"slack_unread"`
+	GeneratedAt   time.Time            `json:"generated_at"`
 }
 
 // DashboardUpdate is sent over WebSocket for real-time updates.

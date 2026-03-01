@@ -13,11 +13,11 @@ import (
 )
 
 type Server struct {
-	hub    *services.Hub
-	wsHub  *websocket.Hub
-	mux    *http.ServeMux
-	port   int
-	host   string
+	hub   *services.Hub
+	wsHub *websocket.Hub
+	mux   *http.ServeMux
+	port  int
+	host  string
 }
 
 func NewServer(hub *services.Hub, host string, port int) *Server {
@@ -169,11 +169,11 @@ func (s *Server) handleTodoAction(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "PUT", "PATCH":
 		var updates struct {
-			Title       *string          `json:"title"`
+			Title       *string            `json:"title"`
 			Status      *models.TodoStatus `json:"status"`
 			Priority    *models.Priority   `json:"priority"`
-			Notes       *string          `json:"notes"`
-			Description *string          `json:"description"`
+			Notes       *string            `json:"notes"`
+			Description *string            `json:"description"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -271,6 +271,10 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func mustJSON(v interface{}) []byte {
-	data, _ := json.Marshal(v)
+	data, err := json.Marshal(v)
+	if err != nil {
+		log.Printf("JSON marshal error: %v", err)
+		return []byte("{}")
+	}
 	return data
 }
