@@ -26,7 +26,7 @@ type ServerConfig struct {
 }
 
 type WeatherConfig struct {
-	APIKey  string  `json:"api_key"`
+	APIKey  string  `json:"api_key,omitempty"`
 	City    string  `json:"city"`
 	Country string  `json:"country"`
 	Units   string  `json:"units"`
@@ -36,7 +36,7 @@ type WeatherConfig struct {
 }
 
 type NewsConfig struct {
-	APIKey     string   `json:"api_key"`
+	APIKey     string   `json:"api_key,omitempty"`
 	Sources    []string `json:"sources"`
 	Country    string   `json:"country"`
 	Categories []string `json:"categories"`

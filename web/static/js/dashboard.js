@@ -215,11 +215,14 @@ function renderNews() {
     }
 
     const html = news.map(n => {
-        return `<div class="list-item news-item" onclick="if('${escapeHtml(n.url)}'!=='#')window.open('${escapeHtml(n.url)}','_blank')">
-            <div class="list-item-content">
-                <div class="list-item-title">${escapeHtml(n.title)}</div>
-                <div class="list-item-meta">${escapeHtml(n.source)} &middot; ${timeAgo(n.published_at)}</div>
-            </div>
+        const desc = n.description && n.description !== '#' ?
+            `<div class="news-desc">${escapeHtml(n.description)}</div>` : '';
+        const urlAttr = n.url && n.url !== '#' ?
+            `onclick="window.open('${escapeHtml(n.url)}','_blank')"` : '';
+        return `<div class="news-item" ${urlAttr}>
+            <div class="list-item-title">${escapeHtml(n.title)}</div>
+            ${desc}
+            <div class="list-item-meta">${escapeHtml(n.source)} &middot; ${timeAgo(n.published_at)}</div>
         </div>`;
     }).join('');
 
