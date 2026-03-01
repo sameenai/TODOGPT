@@ -29,6 +29,8 @@ func TestNewStore(t *testing.T) {
 }
 
 func TestNewStoreDefaultPath(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
 	s, err := NewStore("")
 	if err != nil {
 		t.Fatalf("NewStore with empty path failed: %v", err)

@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,6 +15,17 @@ import (
 	"github.com/todogpt/daily-briefing/internal/models"
 	"github.com/todogpt/daily-briefing/internal/services"
 )
+
+func freePort(t *testing.T) int {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("could not get free port: %v", err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	return port
+}
 
 func testServer() *Server {
 	cfg := config.DefaultConfig()
@@ -590,20 +603,28 @@ func TestMustJSONError(t *testing.T) {
 }
 
 func TestStartListensAndServes(t *testing.T) {
+	port := freePort(t)
 	cfg := config.DefaultConfig()
 	hub := services.NewHub(cfg)
-	s := NewServer(hub, "127.0.0.1", 19876)
+	s := NewServer(hub, "127.0.0.1", port)
 
 	go func() {
 		_ = s.Start()
 	}()
 
-	// Wait for server to start
-	time.Sleep(200 * time.Millisecond)
-
-	resp, err := http.Get("http://127.0.0.1:19876/api/weather")
+	// Poll until server is ready instead of fixed sleep
+	addr := fmt.Sprintf("http://127.0.0.1:%d/api/weather", port)
+	var resp *http.Response
+	var err error
+	for i := 0; i < 20; i++ {
+		resp, err = http.Get(addr)
+		if err == nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	if err != nil {
-		t.Fatalf("server not responding: %v", err)
+		t.Fatalf("server not responding after retries: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {

@@ -396,7 +396,9 @@ func TestPrintAll(t *testing.T) {
 }
 
 func TestRun(t *testing.T) {
-	// run() loads config, fetches all services (mock fallback), and prints
+	// Use a temp home so run() doesn't depend on real home dir config
+	t.Setenv("HOME", t.TempDir())
+
 	output := captureOutput(func() {
 		err := run()
 		if err != nil {
@@ -412,28 +414,17 @@ func TestRun(t *testing.T) {
 }
 
 func TestRunConfigError(t *testing.T) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Skip("cannot determine home dir")
-	}
-	dir := filepath.Join(home, ".daily-briefing")
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	dir := filepath.Join(tmpDir, ".daily-briefing")
 	path := filepath.Join(dir, "config.json")
 
-	// Save existing config if present
-	existing, readErr := os.ReadFile(path)
-
-	// Write invalid JSON to config
+	// Write invalid JSON to config in the temp home
 	os.MkdirAll(dir, 0755)
 	if err := os.WriteFile(path, []byte("invalid{{{"), 0600); err != nil {
 		t.Fatalf("failed to write test config: %v", err)
 	}
-	defer func() {
-		if readErr == nil {
-			os.WriteFile(path, existing, 0600)
-		} else {
-			os.Remove(path)
-		}
-	}()
 
 	runErr := run()
 	if runErr == nil {

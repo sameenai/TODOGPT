@@ -3,12 +3,24 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+func freePort(t *testing.T) int {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("could not get free port: %v", err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	return port
+}
 
 func TestRunInit(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -35,15 +47,19 @@ func TestRunInit(t *testing.T) {
 }
 
 func TestRunInitDefaultPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
 	err := run([]string{"--init"})
 	if err != nil {
-		t.Logf("run --init to default path: %v (may fail in CI)", err)
-		return
+		t.Fatalf("run --init to default path failed: %v", err)
 	}
 
-	// Cleanup
-	home, _ := os.UserHomeDir()
-	os.Remove(filepath.Join(home, ".daily-briefing", "config.json"))
+	// Verify config was created in the temp home
+	path := filepath.Join(tmpDir, ".daily-briefing", "config.json")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		t.Error("config file was not created at default path")
+	}
 }
 
 func TestRunInvalidFlag(t *testing.T) {
@@ -94,18 +110,24 @@ func TestRunStartsServer(t *testing.T) {
 		t.Fatalf("init failed: %v", err)
 	}
 
-	// Start server in background with a specific port
-	port := 19877
+	// Get a free port to avoid conflicts
+	port := freePort(t)
 	go func() {
 		_ = run([]string{"--config", path, "--port", fmt.Sprintf("%d", port)})
 	}()
 
-	// Wait for server to start
-	time.Sleep(500 * time.Millisecond)
-
-	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/api/weather", port))
+	// Poll until server is ready instead of fixed sleep
+	addr := fmt.Sprintf("http://127.0.0.1:%d/api/weather", port)
+	var resp *http.Response
+	for i := 0; i < 20; i++ {
+		resp, err = http.Get(addr)
+		if err == nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	if err != nil {
-		t.Fatalf("server not responding: %v", err)
+		t.Fatalf("server not responding after retries: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {

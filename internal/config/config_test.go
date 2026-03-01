@@ -95,6 +95,8 @@ func TestLoadNonExistentFile(t *testing.T) {
 }
 
 func TestLoadEmptyPath(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
 	cfg, err := Load("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -173,14 +175,16 @@ func TestSaveCreatesDirectory(t *testing.T) {
 }
 
 func TestSaveDefaultPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
 	cfg := DefaultConfig()
 	cfg.Server.Port = 7777
 
-	// Save to default path (home dir)
+	// Save to default path (temp home dir)
 	err := cfg.Save("")
 	if err != nil {
-		t.Logf("Save to default path: %v (may fail in CI)", err)
-		return
+		t.Fatalf("Save to default path failed: %v", err)
 	}
 
 	// Load from default path
@@ -191,10 +195,6 @@ func TestSaveDefaultPath(t *testing.T) {
 	if loaded.Server.Port != 7777 {
 		t.Errorf("expected port 7777, got %d", loaded.Server.Port)
 	}
-
-	// Cleanup
-	home, _ := os.UserHomeDir()
-	os.Remove(filepath.Join(home, ".daily-briefing", "config.json"))
 }
 
 func TestLoadInvalidJSON(t *testing.T) {
