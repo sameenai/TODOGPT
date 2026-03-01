@@ -16,9 +16,8 @@ func TestNewNewsService(t *testing.T) {
 	}
 }
 
-func TestNewsFetchNoAPIKey(t *testing.T) {
+func TestNewsFetchReturnsData(t *testing.T) {
 	svc := NewNewsService(config.NewsConfig{
-		Sources:  []string{"techcrunch"},
 		MaxItems: 10,
 	})
 
@@ -27,7 +26,7 @@ func TestNewsFetchNoAPIKey(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(items) == 0 {
-		t.Error("expected mock news items")
+		t.Error("expected news items (live or mock fallback)")
 	}
 	for _, item := range items {
 		if item.Title == "" {
@@ -56,6 +55,20 @@ func TestNewsGetCachedAfterFetch(t *testing.T) {
 	cached := svc.GetCached()
 	if len(cached) == 0 {
 		t.Error("expected cached news items")
+	}
+}
+
+func TestNewsFetchDefaultMaxItems(t *testing.T) {
+	svc := NewNewsService(config.NewsConfig{
+		MaxItems: 0, // Should default to 10
+	})
+
+	items, err := svc.Fetch()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(items) == 0 {
+		t.Error("expected news items with default max items")
 	}
 }
 

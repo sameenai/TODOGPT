@@ -251,3 +251,157 @@ func TestBroadcastMethod(t *testing.T) {
 	hub.Broadcast([]byte("test"))
 	time.Sleep(50 * time.Millisecond)
 }
+
+func TestServeWsNonWebSocket(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+
+	// Non-WebSocket HTTP request should fail upgrade gracefully
+	req := httptest.NewRequest("GET", "/ws", nil)
+	w := httptest.NewRecorder()
+	ServeWs(hub, w, req)
+
+	// No client should be registered
+	time.Sleep(50 * time.Millisecond)
+	hub.mu.RLock()
+	if len(hub.clients) != 0 {
+		t.Errorf("expected 0 clients after failed upgrade, got %d", len(hub.clients))
+	}
+	hub.mu.RUnlock()
+}
+
+func TestHubRunDropsSlowClient(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+
+	// Create a client with a tiny send buffer that will fill up
+	slowClient := &Client{hub: hub, send: make(chan []byte, 1)}
+	hub.register <- slowClient
+	time.Sleep(50 * time.Millisecond)
+
+	// Fill the send buffer
+	slowClient.send <- []byte("fill")
+
+	// Now broadcast should hit the default case and drop the slow client
+	hub.Broadcast([]byte(`{"type":"overflow"}`))
+	time.Sleep(100 * time.Millisecond)
+
+	hub.mu.RLock()
+	count := len(hub.clients)
+	hub.mu.RUnlock()
+	if count != 0 {
+		t.Errorf("expected slow client to be dropped, got %d clients", count)
+	}
+}
+
+func TestWritePumpChannelClose(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ServeWs(hub, w, r)
+	}))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/"
+	conn, _, err := ws.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial error: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Find the client and close its send channel via unregister
+	hub.mu.RLock()
+	for client := range hub.clients {
+		hub.unregister <- client
+		break
+	}
+	hub.mu.RUnlock()
+
+	time.Sleep(200 * time.Millisecond)
+
+	// Connection should be closed
+	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_, _, err = conn.ReadMessage()
+	if err == nil {
+		t.Error("expected read error after client unregistered")
+	}
+	conn.Close()
+}
+
+func TestWritePumpPingTicker(t *testing.T) {
+	// Set a short ping interval for testing
+	oldInterval := PingInterval
+	PingInterval = 100 * time.Millisecond
+	defer func() { PingInterval = oldInterval }()
+
+	hub := NewHub()
+	go hub.Run()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ServeWs(hub, w, r)
+	}))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/"
+	conn, _, err := ws.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial error: %v", err)
+	}
+	defer conn.Close()
+
+	// Set up pong handler to track pings
+	pingReceived := make(chan struct{}, 1)
+	conn.SetPingHandler(func(appData string) error {
+		select {
+		case pingReceived <- struct{}{}:
+		default:
+		}
+		return conn.WriteControl(ws.PongMessage, []byte(appData), time.Now().Add(time.Second))
+	})
+
+	// Start a read loop to process control messages
+	go func() {
+		for {
+			_, _, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	// Wait for a ping to arrive (interval is 100ms)
+	select {
+	case <-pingReceived:
+		// Ping received, writePump ticker path is covered
+	case <-time.After(2 * time.Second):
+		t.Error("timeout waiting for ping from server")
+	}
+}
+
+func TestWritePumpWriteError(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ServeWs(hub, w, r)
+	}))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/"
+	conn, _, err := ws.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial error: %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	// Close the connection from client side
+	conn.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	// Broadcast a message — writePump should fail on WriteMessage
+	hub.Broadcast([]byte(`{"type":"after_close"}`))
+	time.Sleep(200 * time.Millisecond)
+}

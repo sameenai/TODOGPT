@@ -23,28 +23,38 @@ const (
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	cfg, err := config.Load("")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Config error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 
 	hub := services.NewHub(cfg)
 	briefing := hub.FetchAll()
 
-	printHeader()
-	printWeather(briefing)
-	printCalendar(briefing)
-	printNews(briefing)
-	printEmails(briefing)
-	printSlack(briefing)
-	printGitHub(briefing)
-	printTodos(briefing)
-	printFooter(briefing)
+	printAll(briefing)
+	return nil
 }
 
-func printHeader() {
-	now := time.Now()
+func printAll(b *models.Briefing) {
+	printHeaderAt(time.Now())
+	printWeather(b)
+	printCalendar(b)
+	printNews(b)
+	printEmails(b)
+	printSlack(b)
+	printGitHub(b)
+	printTodos(b)
+	printFooter(b)
+}
+
+func printHeaderAt(now time.Time) {
 	greeting := "Good morning"
 	hour := now.Hour()
 	if hour >= 12 && hour < 17 {

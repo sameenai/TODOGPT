@@ -2,15 +2,30 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	ws "github.com/gorilla/websocket"
 	"github.com/todogpt/daily-briefing/internal/config"
 	"github.com/todogpt/daily-briefing/internal/models"
 	"github.com/todogpt/daily-briefing/internal/services"
 )
+
+func freePort(t *testing.T) int {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("could not get free port: %v", err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	return port
+}
 
 func testServer() *Server {
 	cfg := config.DefaultConfig()
@@ -514,5 +529,143 @@ func TestTodoPostAndList(t *testing.T) {
 	}
 	if !found {
 		t.Error("posted todo not found in GET /api/todos response")
+	}
+}
+
+func TestHandler(t *testing.T) {
+	s := testServer()
+	handler := s.Handler()
+	if handler == nil {
+		t.Fatal("expected non-nil handler")
+	}
+
+	// Verify routes work through the handler (which includes CORS wrapping)
+	req := httptest.NewRequest("GET", "/api/weather", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if w.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Error("expected CORS header from Handler")
+	}
+}
+
+func TestBridgeUpdatesAndWebSocket(t *testing.T) {
+	s := testServer()
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	// Connect a WebSocket client
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	conn, _, err := ws.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial error: %v", err)
+	}
+	defer conn.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Broadcast through the services hub
+	s.hub.Broadcast(models.DashboardUpdate{Type: "bridge_test", Payload: "data"})
+
+	// The bridgeUpdates goroutine should forward this to the WS client
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("read error: %v", err)
+	}
+
+	if !strings.Contains(string(msg), "bridge_test") {
+		t.Errorf("expected bridge_test in message, got %q", msg)
+	}
+}
+
+func TestBridgeUpdatesSkipsMarshalError(t *testing.T) {
+	s := testServer()
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Broadcast an unmarshalable payload (channels can't be marshaled)
+	s.hub.Broadcast(models.DashboardUpdate{Type: "bad", Payload: make(chan int)})
+	time.Sleep(100 * time.Millisecond)
+	// No crash means bridgeUpdates handled the marshal error gracefully
+}
+
+func TestMustJSONError(t *testing.T) {
+	// Channels cannot be marshaled to JSON
+	result := mustJSON(make(chan int))
+	if string(result) != "{}" {
+		t.Errorf("expected empty JSON on marshal error, got %q", result)
+	}
+}
+
+func TestStartListensAndServes(t *testing.T) {
+	port := freePort(t)
+	cfg := config.DefaultConfig()
+	hub := services.NewHub(cfg)
+	s := NewServer(hub, "127.0.0.1", port)
+
+	go func() {
+		_ = s.Start()
+	}()
+
+	// Poll until server is ready instead of fixed sleep
+	addr := fmt.Sprintf("http://127.0.0.1:%d/api/weather", port)
+	var resp *http.Response
+	var err error
+	for i := 0; i < 20; i++ {
+		resp, err = http.Get(addr)
+		if err == nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if err != nil {
+		t.Fatalf("server not responding after retries: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandleTodoActionPUT(t *testing.T) {
+	s := testServer()
+	go s.wsHub.Run()
+
+	s.hub.Todos.Add(models.TodoItem{ID: "put-1", Title: "Original", Priority: models.PriorityLow})
+
+	body := `{"title": "Updated via PUT", "priority": 3, "notes": "test notes", "description": "test desc"}`
+	req := httptest.NewRequest("PUT", "/api/todos/put-1", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	s.handleTodoAction(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+
+	// Verify all fields updated
+	items := s.hub.Todos.List()
+	for _, item := range items {
+		if item.ID == "put-1" {
+			if item.Title != "Updated via PUT" {
+				t.Errorf("expected title 'Updated via PUT', got %q", item.Title)
+			}
+			if item.Priority != models.PriorityUrgent {
+				t.Errorf("expected priority Urgent (3), got %d", item.Priority)
+			}
+			if item.Notes != "test notes" {
+				t.Errorf("expected notes 'test notes', got %q", item.Notes)
+			}
+			if item.Description != "test desc" {
+				t.Errorf("expected description 'test desc', got %q", item.Description)
+			}
+		}
 	}
 }

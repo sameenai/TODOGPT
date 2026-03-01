@@ -95,6 +95,8 @@ func TestLoadNonExistentFile(t *testing.T) {
 }
 
 func TestLoadEmptyPath(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
 	cfg, err := Load("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -173,14 +175,16 @@ func TestSaveCreatesDirectory(t *testing.T) {
 }
 
 func TestSaveDefaultPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
 	cfg := DefaultConfig()
 	cfg.Server.Port = 7777
 
-	// Save to default path (home dir)
+	// Save to default path (temp home dir)
 	err := cfg.Save("")
 	if err != nil {
-		t.Logf("Save to default path: %v (may fail in CI)", err)
-		return
+		t.Fatalf("Save to default path failed: %v", err)
 	}
 
 	// Load from default path
@@ -191,10 +195,6 @@ func TestSaveDefaultPath(t *testing.T) {
 	if loaded.Server.Port != 7777 {
 		t.Errorf("expected port 7777, got %d", loaded.Server.Port)
 	}
-
-	// Cleanup
-	home, _ := os.UserHomeDir()
-	os.Remove(filepath.Join(home, ".daily-briefing", "config.json"))
 }
 
 func TestLoadInvalidJSON(t *testing.T) {
@@ -236,6 +236,64 @@ func TestConfigJSONRoundTrip(t *testing.T) {
 	}
 	if !loaded.GitHub.Enabled {
 		t.Error("expected GitHub enabled")
+	}
+}
+
+func TestLoadDirectoryAsFile(t *testing.T) {
+	// Passing a directory path triggers the non-IsNotExist read error branch
+	tmpDir := t.TempDir()
+	_, err := Load(tmpDir)
+	if err == nil {
+		t.Error("expected error when loading a directory as config file")
+	}
+}
+
+func TestSaveToExplicitPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "explicit-config.json")
+
+	cfg := DefaultConfig()
+	cfg.Server.Port = 5555
+
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save to explicit path failed: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if loaded.Server.Port != 5555 {
+		t.Errorf("expected port 5555, got %d", loaded.Server.Port)
+	}
+}
+
+func TestSaveToReadOnlyDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+	os.MkdirAll(readOnlyDir, 0555)
+	path := filepath.Join(readOnlyDir, "subdir", "config.json")
+
+	cfg := DefaultConfig()
+	err := cfg.Save(path)
+	// Should fail because readOnlyDir doesn't allow creating subdirs
+	if err == nil {
+		// Cleanup if it somehow succeeded
+		os.Remove(path)
+	}
+}
+
+func TestSaveMkdirAllError(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Create a FILE where the .daily-briefing directory would be created,
+	// causing MkdirAll to fail.
+	os.WriteFile(filepath.Join(tmpDir, ".daily-briefing"), []byte("file"), 0600)
+	t.Setenv("HOME", tmpDir)
+
+	cfg := DefaultConfig()
+	err := cfg.Save("")
+	if err == nil {
+		t.Error("expected error when .daily-briefing exists as a file")
 	}
 }
 

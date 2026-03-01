@@ -9,6 +9,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// PingInterval controls how often the server sends ping messages to clients.
+var PingInterval = 30 * time.Second
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -61,7 +64,7 @@ func (h *Hub) Run() {
 			log.Printf("WebSocket client disconnected (%d total)", len(h.clients))
 
 		case message := <-h.broadcast:
-			h.mu.RLock()
+			h.mu.Lock()
 			for client := range h.clients {
 				select {
 				case client.send <- message:
@@ -70,7 +73,7 @@ func (h *Hub) Run() {
 					delete(h.clients, client)
 				}
 			}
-			h.mu.RUnlock()
+			h.mu.Unlock()
 		}
 	}
 }
@@ -116,7 +119,7 @@ func (c *Client) readPump() {
 }
 
 func (c *Client) writePump() {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(PingInterval)
 	defer func() {
 		ticker.Stop()
 		_ = c.conn.Close()
