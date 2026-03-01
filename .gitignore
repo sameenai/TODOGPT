@@ -1,4 +1,6 @@
 bin/
+server
+briefing
 *.exe
 *.test
 *.out
