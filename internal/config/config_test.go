@@ -39,8 +39,8 @@ func TestDefaultConfig(t *testing.T) {
 	if !cfg.News.Enabled {
 		t.Error("expected news enabled by default")
 	}
-	if len(cfg.News.Sources) != 3 {
-		t.Errorf("expected 3 default news sources, got %d", len(cfg.News.Sources))
+	if cfg.News.Sources != "techcrunch,hacker-news,the-verge" {
+		t.Errorf("expected default news sources 'techcrunch,hacker-news,the-verge', got %s", cfg.News.Sources)
 	}
 
 	if !cfg.Google.CalendarEnabled {

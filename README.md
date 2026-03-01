@@ -84,12 +84,17 @@ Then edit the file:
   },
   "weather": {
     "api_key": "YOUR_OPENWEATHERMAP_KEY",
-    "city": "San Francisco",
+    "city": "London",
+    "country": "GB",
+    "units": "metric",
     "enabled": true
   },
   "news": {
     "api_key": "YOUR_NEWSAPI_KEY",
-    "max_items": 10,
+    "country": "gb",
+    "categories": ["technology", "business", "general"],
+    "sources": "techcrunch,hacker-news,the-verge,bbc-news",
+    "max_items": 25,
     "enabled": true
   },
   "slack": {

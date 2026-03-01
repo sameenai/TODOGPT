@@ -28,6 +28,7 @@ type ServerConfig struct {
 type WeatherConfig struct {
 	APIKey  string  `json:"api_key"`
 	City    string  `json:"city"`
+	Country string  `json:"country"`
 	Units   string  `json:"units"`
 	Lat     float64 `json:"lat"`
 	Lon     float64 `json:"lon"`
@@ -35,10 +36,12 @@ type WeatherConfig struct {
 }
 
 type NewsConfig struct {
-	APIKey   string   `json:"api_key"`
-	Sources  []string `json:"sources"`
-	MaxItems int      `json:"max_items"`
-	Enabled  bool     `json:"enabled"`
+	APIKey     string   `json:"api_key"`
+	Sources    string   `json:"sources"`
+	Country    string   `json:"country"`
+	Categories []string `json:"categories"`
+	MaxItems   int      `json:"max_items"`
+	Enabled    bool     `json:"enabled"`
 }
 
 type GoogleConfig struct {
@@ -73,7 +76,7 @@ type JiraConfig struct {
 	BaseURL string `json:"base_url"`
 	Email   string `json:"email"`
 	Token   string `json:"api_token"`
-	Project string `json:"project"`
+	Project string `json:"project_key"`
 	Enabled bool   `json:"enabled"`
 }
 
@@ -102,7 +105,7 @@ func DefaultConfig() *Config {
 			Enabled: true,
 		},
 		News: NewsConfig{
-			Sources:  []string{"techcrunch", "hacker-news", "the-verge"},
+			Sources:  "techcrunch,hacker-news,the-verge",
 			MaxItems: 10,
 			Enabled:  true,
 		},
