@@ -8,7 +8,7 @@ import (
 
 func TestNewNewsService(t *testing.T) {
 	svc := NewNewsService(config.NewsConfig{
-		Sources:  []string{"techcrunch"},
+		Sources:  "techcrunch",
 		MaxItems: 5,
 	})
 	if svc == nil {
@@ -18,7 +18,7 @@ func TestNewNewsService(t *testing.T) {
 
 func TestNewsFetchNoAPIKey(t *testing.T) {
 	svc := NewNewsService(config.NewsConfig{
-		Sources:  []string{"techcrunch"},
+		Sources:  "techcrunch",
 		MaxItems: 10,
 	})
 

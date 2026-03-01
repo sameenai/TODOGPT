@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -44,17 +43,32 @@ func (s *NewsService) Fetch() ([]models.NewsItem, error) {
 		return items, nil
 	}
 
-	sources := strings.Join(s.cfg.Sources, ",")
-	url := fmt.Sprintf(
-		"https://newsapi.org/v2/top-headlines?sources=%s&pageSize=%d&apiKey=%s",
-		sources, s.cfg.MaxItems, s.cfg.APIKey,
-	)
+	var url string
+	if s.cfg.Sources != "" {
+		url = fmt.Sprintf(
+			"https://newsapi.org/v2/top-headlines?sources=%s&pageSize=%d&apiKey=%s",
+			s.cfg.Sources, s.cfg.MaxItems, s.cfg.APIKey,
+		)
+	} else if s.cfg.Country != "" {
+		url = fmt.Sprintf(
+			"https://newsapi.org/v2/top-headlines?country=%s&pageSize=%d&apiKey=%s",
+			s.cfg.Country, s.cfg.MaxItems, s.cfg.APIKey,
+		)
+		if len(s.cfg.Categories) > 0 {
+			url += "&category=" + s.cfg.Categories[0]
+		}
+	} else {
+		url = fmt.Sprintf(
+			"https://newsapi.org/v2/top-headlines?pageSize=%d&apiKey=%s",
+			s.cfg.MaxItems, s.cfg.APIKey,
+		)
+	}
 
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("news API error: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var apiResp newsAPIResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {

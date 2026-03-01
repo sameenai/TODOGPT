@@ -100,7 +100,7 @@ func (s *Server) withCORS(next http.Handler) http.Handler {
 
 func (s *Server) writeJSON(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
 func (s *Server) handleBriefing(w http.ResponseWriter, r *http.Request) {

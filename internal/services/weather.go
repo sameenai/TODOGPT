@@ -42,16 +42,21 @@ func (s *WeatherService) Fetch() (*models.Weather, error) {
 		return s.mockWeather(), nil
 	}
 
+	query := s.cfg.City
+	if s.cfg.Country != "" {
+		query = s.cfg.City + "," + s.cfg.Country
+	}
+
 	url := fmt.Sprintf(
 		"https://api.openweathermap.org/data/2.5/weather?q=%s&appid=%s&units=%s",
-		s.cfg.City, s.cfg.APIKey, s.cfg.Units,
+		query, s.cfg.APIKey, s.cfg.Units,
 	)
 
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("weather API error: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var owResp openWeatherResponse
 	if err := json.NewDecoder(resp.Body).Decode(&owResp); err != nil {
