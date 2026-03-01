@@ -68,7 +68,7 @@ func (s *NewsService) Fetch() ([]models.NewsItem, error) {
 	if err != nil {
 		return nil, fmt.Errorf("news API error: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var apiResp newsAPIResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {

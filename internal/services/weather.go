@@ -56,7 +56,7 @@ func (s *WeatherService) Fetch() (*models.Weather, error) {
 	if err != nil {
 		return nil, fmt.Errorf("weather API error: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var owResp openWeatherResponse
 	if err := json.NewDecoder(resp.Body).Decode(&owResp); err != nil {

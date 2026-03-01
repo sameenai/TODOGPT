@@ -20,12 +20,6 @@ linters:
         - fmt.Fprintf
         - fmt.Printf
         - fmt.Println
-        - (*net/http.bodyEOFSignal).Close
-        - (io.Closer).Close
-        - (*github.com/gorilla/websocket.Conn).Close
-        - (*github.com/gorilla/websocket.Conn).SetReadDeadline
-        - (*github.com/gorilla/websocket.Conn).SetWriteDeadline
-        - (*github.com/gorilla/websocket.Conn).WriteMessage
     gocritic:
       disabled-checks:
         - ifElseChain
@@ -40,7 +34,3 @@ linters:
       - path: _test\.go
         linters:
           - errcheck
-      # Allow unchecked errors for json.NewEncoder().Encode in handlers
-      - linters:
-          - errcheck
-        text: "Error return value of .*(Encode|Close)"
