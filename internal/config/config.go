@@ -37,7 +37,7 @@ type WeatherConfig struct {
 
 type NewsConfig struct {
 	APIKey     string   `json:"api_key"`
-	Sources    string   `json:"sources"`
+	Sources    []string `json:"sources"`
 	Country    string   `json:"country"`
 	Categories []string `json:"categories"`
 	MaxItems   int      `json:"max_items"`
@@ -105,7 +105,7 @@ func DefaultConfig() *Config {
 			Enabled: true,
 		},
 		News: NewsConfig{
-			Sources:  "techcrunch,hacker-news,the-verge",
+			Sources:  []string{"techcrunch", "hacker-news", "the-verge"},
 			MaxItems: 10,
 			Enabled:  true,
 		},

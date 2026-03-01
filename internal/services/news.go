@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -44,10 +45,10 @@ func (s *NewsService) Fetch() ([]models.NewsItem, error) {
 	}
 
 	var url string
-	if s.cfg.Sources != "" {
+	if len(s.cfg.Sources) > 0 {
 		url = fmt.Sprintf(
 			"https://newsapi.org/v2/top-headlines?sources=%s&pageSize=%d&apiKey=%s",
-			s.cfg.Sources, s.cfg.MaxItems, s.cfg.APIKey,
+			strings.Join(s.cfg.Sources, ","), s.cfg.MaxItems, s.cfg.APIKey,
 		)
 	} else if s.cfg.Country != "" {
 		url = fmt.Sprintf(

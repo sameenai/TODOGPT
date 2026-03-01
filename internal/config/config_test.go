@@ -39,8 +39,15 @@ func TestDefaultConfig(t *testing.T) {
 	if !cfg.News.Enabled {
 		t.Error("expected news enabled by default")
 	}
-	if cfg.News.Sources != "techcrunch,hacker-news,the-verge" {
-		t.Errorf("expected default news sources 'techcrunch,hacker-news,the-verge', got %s", cfg.News.Sources)
+	expectedSources := []string{"techcrunch", "hacker-news", "the-verge"}
+	if len(cfg.News.Sources) != len(expectedSources) {
+		t.Errorf("expected default news sources %v, got %v", expectedSources, cfg.News.Sources)
+	} else {
+		for i, s := range expectedSources {
+			if cfg.News.Sources[i] != s {
+				t.Errorf("expected source %d to be %s, got %s", i, s, cfg.News.Sources[i])
+			}
+		}
 	}
 
 	if !cfg.Google.CalendarEnabled {
