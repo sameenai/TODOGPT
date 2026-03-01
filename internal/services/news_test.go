@@ -16,9 +16,8 @@ func TestNewNewsService(t *testing.T) {
 	}
 }
 
-func TestNewsFetchNoAPIKey(t *testing.T) {
+func TestNewsFetchReturnsData(t *testing.T) {
 	svc := NewNewsService(config.NewsConfig{
-		Sources:  []string{"techcrunch"},
 		MaxItems: 10,
 	})
 
@@ -27,7 +26,7 @@ func TestNewsFetchNoAPIKey(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(items) == 0 {
-		t.Error("expected mock news items")
+		t.Error("expected news items (live or mock fallback)")
 	}
 	for _, item := range items {
 		if item.Title == "" {
