@@ -42,5 +42,5 @@ ci: lint test build
 clean:
 	rm -rf bin/ coverage.out
 
-init:
+init: build
 	./bin/server --init
