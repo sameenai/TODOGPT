@@ -11,8 +11,11 @@ import (
 	"github.com/todogpt/daily-briefing/internal/services"
 )
 
-func testHub() *services.Hub {
-	return services.NewHub(config.DefaultConfig())
+func testHub(t *testing.T) *services.Hub {
+	t.Helper()
+	cfg := config.DefaultConfig()
+	cfg.Server.DataDir = t.TempDir()
+	return services.NewHub(cfg)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -153,7 +156,7 @@ func TestTruncate(t *testing.T) {
 // ── Model construction ────────────────────────────────────────────────────────
 
 func TestNewModel(t *testing.T) {
-	hub := testHub()
+	hub := testHub(t)
 	m := newModel(hub)
 	if !m.loading {
 		t.Error("expected loading=true on new model")
@@ -164,7 +167,7 @@ func TestNewModel(t *testing.T) {
 }
 
 func TestInitReturnsCmds(t *testing.T) {
-	hub := testHub()
+	hub := testHub(t)
 	m := newModel(hub)
 	cmd := m.Init()
 	if cmd == nil {
@@ -417,7 +420,7 @@ func TestKeyTodoUpAtZero(t *testing.T) {
 // ── Key: mark done ────────────────────────────────────────────────────────────
 
 func TestKeyTodoMarkDoneSpace(t *testing.T) {
-	hub := testHub()
+	hub := testHub(t)
 	// seed the hub's todo service with our test todos
 	hub.Todos.Add(models.TodoItem{ID: "t1", Title: "Task 1", Status: models.TodoPending})
 	hub.Todos.Add(models.TodoItem{ID: "t2", Title: "Task 2", Status: models.TodoPending})
@@ -437,7 +440,7 @@ func TestKeyTodoMarkDoneSpace(t *testing.T) {
 }
 
 func TestKeyTodoMarkDoneEnter(t *testing.T) {
-	hub := testHub()
+	hub := testHub(t)
 	hub.Todos.Add(models.TodoItem{ID: "x1", Title: "Task A", Status: models.TodoPending})
 
 	m := loadedModel()
@@ -453,7 +456,7 @@ func TestKeyTodoMarkDoneEnter(t *testing.T) {
 }
 
 func TestKeyTodoMarkDoneAdjustsCursor(t *testing.T) {
-	hub := testHub()
+	hub := testHub(t)
 	hub.Todos.Add(models.TodoItem{ID: "a", Title: "A", Status: models.TodoPending})
 	hub.Todos.Add(models.TodoItem{ID: "b", Title: "B", Status: models.TodoPending})
 
@@ -936,7 +939,7 @@ func TestUpdateUnknownMsg(t *testing.T) {
 // ── doFetch execution ─────────────────────────────────────────────────────────
 
 func TestDoFetch(t *testing.T) {
-	hub := testHub()
+	hub := testHub(t)
 	cmd := doFetch(hub)
 	if cmd == nil {
 		t.Fatal("doFetch should return a non-nil Cmd")
