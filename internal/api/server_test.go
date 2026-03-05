@@ -204,6 +204,48 @@ func TestHandleGitHub(t *testing.T) {
 	}
 }
 
+func TestHandleJira(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("GET", "/api/jira", nil)
+	w := httptest.NewRecorder()
+
+	s.handleJira(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	var tickets []models.JiraTicket
+	if err := json.NewDecoder(resp.Body).Decode(&tickets); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if len(tickets) == 0 {
+		t.Error("expected jira tickets (mock data)")
+	}
+}
+
+func TestHandleNotion(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("GET", "/api/notion", nil)
+	w := httptest.NewRecorder()
+
+	s.handleNotion(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	var pages []models.NotionPage
+	if err := json.NewDecoder(resp.Body).Decode(&pages); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if len(pages) == 0 {
+		t.Error("expected notion pages (mock data)")
+	}
+}
+
 func TestHandleTodosGet(t *testing.T) {
 	s := testServer(t)
 	req := httptest.NewRequest("GET", "/api/todos", nil)
@@ -482,6 +524,8 @@ func TestFullRouteIntegration(t *testing.T) {
 		{"GET", "/api/emails", 200},
 		{"GET", "/api/slack", 200},
 		{"GET", "/api/github", 200},
+		{"GET", "/api/jira", 200},
+		{"GET", "/api/notion", 200},
 		{"GET", "/api/todos", 200},
 		{"GET", "/api/signals", 200},
 		{"GET", "/api/briefing", 200},

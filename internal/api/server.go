@@ -41,6 +41,8 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("/api/emails", s.handleEmails)
 	s.mux.HandleFunc("/api/slack", s.handleSlack)
 	s.mux.HandleFunc("/api/github", s.handleGitHub)
+	s.mux.HandleFunc("/api/jira", s.handleJira)
+	s.mux.HandleFunc("/api/notion", s.handleNotion)
 	s.mux.HandleFunc("/api/todos", s.handleTodos)
 	s.mux.HandleFunc("/api/todos/", s.handleTodoAction)
 	s.mux.HandleFunc("/api/signals", s.handleSignals)
@@ -143,6 +145,16 @@ func (s *Server) handleSlack(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGitHub(w http.ResponseWriter, r *http.Request) {
 	notifs := s.hub.GitHub.GetCached()
 	s.writeJSON(w, notifs)
+}
+
+func (s *Server) handleJira(w http.ResponseWriter, r *http.Request) {
+	tickets := s.hub.Jira.GetCached()
+	s.writeJSON(w, tickets)
+}
+
+func (s *Server) handleNotion(w http.ResponseWriter, r *http.Request) {
+	pages := s.hub.Notion.GetCached()
+	s.writeJSON(w, pages)
 }
 
 func (s *Server) handleTodos(w http.ResponseWriter, r *http.Request) {

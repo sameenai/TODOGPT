@@ -157,6 +157,8 @@ function renderAll() {
     renderEmails();
     renderSlack();
     renderGitHub();
+    renderJira();
+    renderNotion();
     renderTodos();
     updateScores();
     updateInboxZero();
@@ -309,6 +311,67 @@ function renderGitHub() {
     }).join('');
 
     document.getElementById('github-list').innerHTML = html;
+}
+
+// ---- Jira ----
+function renderJira() {
+    const tickets = (briefingData.jira_tickets) || [];
+    document.getElementById('jira-count').textContent = tickets.length;
+
+    if (tickets.length === 0) {
+        document.getElementById('jira-list').innerHTML = '<div class="empty-state">No open tickets</div>';
+        return;
+    }
+
+    const priorityColor = { Critical: 'var(--accent-red)', High: 'var(--accent-orange)', Medium: 'var(--accent-yellow)', Low: 'var(--text-dim)' };
+    const html = tickets.map(t => {
+        const color = priorityColor[t.priority] || 'var(--text-dim)';
+        const due = t.due_date && t.due_date !== '0001-01-01T00:00:00Z'
+            ? `<span style="font-size:10px;color:var(--accent-orange);">due ${formatDate(t.due_date)}</span>` : '';
+        const link = t.url ? `onclick="window.open('${escapeHtml(t.url)}','_blank')"` : '';
+        return `<div class="list-item" ${link} style="${t.url ? 'cursor:pointer;' : ''}">
+            <div class="list-item-icon" style="background:${color}20;color:${color};font-size:10px;font-weight:700;">${escapeHtml(t.type || 'IS')}</div>
+            <div class="list-item-content">
+                <div class="list-item-title">[${escapeHtml(t.key)}] ${escapeHtml(t.summary)}</div>
+                <div class="list-item-meta">${escapeHtml(t.status)} ${due}</div>
+            </div>
+            <span style="font-size:10px;color:${color};font-weight:600;">${escapeHtml(t.priority)}</span>
+        </div>`;
+    }).join('');
+
+    document.getElementById('jira-list').innerHTML = html;
+}
+
+// ---- Notion ----
+function renderNotion() {
+    const pages = (briefingData.notion_pages) || [];
+    document.getElementById('notion-count').textContent = pages.length;
+
+    if (pages.length === 0) {
+        document.getElementById('notion-list').innerHTML = '<div class="empty-state">No open pages</div>';
+        return;
+    }
+
+    const statusColor = { 'In Progress': 'var(--accent-blue)', 'Not Started': 'var(--text-dim)', 'Done': 'var(--accent-green)' };
+    const html = pages.map(p => {
+        const color = statusColor[p.status] || 'var(--text-dim)';
+        const due = p.due_date && p.due_date !== '0001-01-01T00:00:00Z'
+            ? `<span style="font-size:10px;color:var(--accent-orange);">due ${formatDate(p.due_date)}</span>` : '';
+        const link = p.url ? `onclick="window.open('${escapeHtml(p.url)}','_blank')"` : '';
+        return `<div class="list-item" ${link} style="${p.url ? 'cursor:pointer;' : ''}">
+            <div class="list-item-content">
+                <div class="list-item-title">${escapeHtml(p.title)}</div>
+                <div class="list-item-meta">
+                    <span style="color:${color};">${escapeHtml(p.status)}</span>
+                    ${p.priority ? `<span>&middot; ${escapeHtml(p.priority)}</span>` : ''}
+                    ${due}
+                </div>
+            </div>
+            <span class="list-item-time">${timeAgo(p.updated_at)}</span>
+        </div>`;
+    }).join('');
+
+    document.getElementById('notion-list').innerHTML = html;
 }
 
 // ---- Todos ----
