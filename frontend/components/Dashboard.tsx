@@ -75,14 +75,26 @@ export function Dashboard({ initialBriefing }: Props) {
           {/* Column 1: Weather · Calendar · Notion */}
           <div className="space-y-4">
             <WeatherSection weather={briefing.weather} isLive={briefing.integration_statuses?.weather} />
-            <CalendarSection events={briefing.events} isLive={briefing.integration_statuses?.calendar} />
+            <CalendarSection
+              events={briefing.events}
+              isLive={briefing.integration_statuses?.calendar}
+              isAvailable={briefing.integration_available?.calendar}
+            />
             <NotionSection pages={briefing.notion_pages} isLive={briefing.integration_statuses?.notion} />
           </div>
 
           {/* Column 2: Email · Slack · GitHub · Jira */}
           <div className="space-y-4">
-            <EmailSection emails={briefing.unread_emails} isLive={briefing.integration_statuses?.email} />
-            <SlackSection messages={briefing.slack_messages} isLive={briefing.integration_statuses?.slack} />
+            <EmailSection
+              emails={briefing.unread_emails}
+              isLive={briefing.integration_statuses?.email}
+              isAvailable={briefing.integration_available?.email}
+            />
+            <SlackSection
+              messages={briefing.slack_messages}
+              isLive={briefing.integration_statuses?.slack}
+              isAvailable={briefing.integration_available?.slack}
+            />
             <GitHubSection notifications={briefing.github_notifications} isLive={briefing.integration_statuses?.github} />
             <JiraSection tickets={briefing.jira_tickets} isLive={briefing.integration_statuses?.jira} />
           </div>

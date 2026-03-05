@@ -16,29 +16,42 @@ function Bar({ label, pct, color }: { label: string; pct: number; color: string 
 }
 
 export function InboxZeroProgress({ briefing }: { briefing: Briefing }) {
-  const unreadEmails = briefing.unread_emails?.filter(e => e.is_unread).length ?? 0;
-  const slackMsgs = briefing.slack_messages?.length ?? 0;
-  const unreadGH = briefing.github_notifications?.filter(n => n.unread).length ?? 0;
+  const s = briefing.integration_statuses ?? {};
   const todos = briefing.todos ?? [];
   const doneTodos = todos.filter(t => t.status === 2).length;
   const totalTodos = todos.length;
-
-  const emailPct = Math.max(0, Math.min(100, Math.round(100 - unreadEmails * 5)));
-  const slackPct = Math.max(0, Math.min(100, Math.round(100 - slackMsgs * 10)));
-  const ghPct = Math.max(0, Math.min(100, Math.round(100 - unreadGH * 10)));
   const todoPct = totalTodos > 0 ? Math.round((doneTodos / totalTodos) * 100) : 100;
+
+  const bars: { label: string; pct: number; color: string }[] = [];
+
+  if (s.email) {
+    const unreadEmails = briefing.unread_emails?.filter(e => e.is_unread).length ?? 0;
+    const pct = Math.max(0, Math.min(100, Math.round(100 - unreadEmails * 5)));
+    bars.push({ label: 'Email', pct, color: pct === 100 ? 'bg-green-500' : 'bg-red-500' });
+  }
+  if (s.slack) {
+    const slackMsgs = briefing.slack_messages?.length ?? 0;
+    const pct = Math.max(0, Math.min(100, Math.round(100 - slackMsgs * 10)));
+    bars.push({ label: 'Slack', pct, color: pct >= 80 ? 'bg-green-500' : 'bg-yellow-500' });
+  }
+  if (s.github) {
+    const unreadGH = briefing.github_notifications?.filter(n => n.unread).length ?? 0;
+    const pct = Math.max(0, Math.min(100, Math.round(100 - unreadGH * 10)));
+    bars.push({ label: 'GitHub', pct, color: pct === 100 ? 'bg-green-500' : 'bg-blue-500' });
+  }
+  bars.push({ label: 'Tasks', pct: todoPct, color: todoPct >= 80 ? 'bg-green-500' : 'bg-cyan-500' });
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
       <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">
-        Inbox Zero Progress
+        Focus Progress
       </h3>
       <div className="space-y-3">
-        <Bar label="Email"  pct={emailPct} color={emailPct === 100 ? 'bg-green-500' : 'bg-red-500'} />
-        <Bar label="Slack"  pct={slackPct} color={slackPct >= 80 ? 'bg-green-500' : 'bg-yellow-500'} />
-        <Bar label="GitHub" pct={ghPct}    color={ghPct === 100 ? 'bg-green-500' : 'bg-blue-500'} />
-        <Bar label="Tasks"  pct={todoPct}  color={todoPct >= 80 ? 'bg-green-500' : 'bg-cyan-500'} />
+        {bars.map(b => <Bar key={b.label} label={b.label} pct={b.pct} color={b.color} />)}
       </div>
+      {bars.length === 1 && (
+        <p className="text-xs text-gray-600 mt-3">Connect Email, Slack, or GitHub for more signals.</p>
+      )}
     </div>
   );
 }
