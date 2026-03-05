@@ -48,19 +48,21 @@ The app has three binaries sharing the same `internal/` packages:
 
 ### Data flow
 
-1. `services.Hub` owns all service instances (`WeatherService`, `NewsService`, `CalendarService`, `SlackService`, `EmailService`, `GitHubService`, `TodoService`).
+1. `services.Hub` owns all service instances (`WeatherService`, `NewsService`, `CalendarService`, `SlackService`, `EmailService`, `GitHubService`, `JiraService`, `NotionService`, `TodoService`).
 2. `hub.FetchAll()` fetches all services in parallel (via `sync.WaitGroup`), then calls `TodoService.GenerateFromBriefing()` which auto-creates todos from signals.
 3. The server calls `hub.StartPolling()` in a goroutine, which runs `FetchAll()` on a configurable interval and broadcasts `DashboardUpdate` structs to subscribers.
 4. `api.Server` subscribes to the hub and forwards updates over WebSocket to browser clients via `websocket.Hub`.
 
 ### Key design points
 
-- **`TodoService` is in-memory only** (in `services/todos.go`). There is also `todo/store.go` which persists to `~/.daily-briefing/todos.json`, but the server currently uses the in-memory `TodoService`, not the persistent `Store`. Changes are lost on restart.
-- **`TodoService.GenerateFromBriefing`** deduplicates using a `seen` map keyed by `"source:id"` — re-fetches won't add duplicate todos within a process lifetime, but they will reappear after restart.
+- **`TodoService` persists to `~/.daily-briefing/todos.json`** via `todo.Store`. `NewHub` calls `newTodoService(cfg)` which attaches a `todo.Store`; falls back to in-memory if the store cannot be created. **Test isolation**: pass `cfg.Server.DataDir = t.TempDir()` before calling `services.NewHub(cfg)` so tests don't touch the real store. Both `services/hub_test.go` (`testConfig()`), `services/hub_extra_test.go`, `tui/tui_test.go` (`testHub(t)`), and `api/server_test.go` (`testServer(t)`) follow this pattern.
+- **`TodoService.GenerateFromBriefing`** deduplicates using a `seen` map keyed by `"source:id"`. Re-fetches won't add duplicate todos within a process lifetime. After restart the `seen` map is rebuilt from loaded persisted items. `GenerateFromBriefing` generates todos from Email, Slack, GitHub, Jira, Notion, and Calendar signals.
 - All services have a `GetCached()` method returning the last successful fetch result, and a `Fetch()` method that hits the real API (or returns mock data when unconfigured).
 - Config lives at `~/.daily-briefing/config.json`. Each service section has an `enabled` bool. Services fall back to mock/demo data when disabled or when API keys are missing.
 - The module path is `github.com/todogpt/daily-briefing`. Key dependencies: `github.com/gorilla/websocket`, `github.com/charmbracelet/bubbletea`, `github.com/charmbracelet/lipgloss`.
-- **Security**: `api.Server.Start()` uses `http.Server` with 15s read/write and 60s idle timeouts (not bare `ListenAndServe`). Config dir created with `0750`, files with `0600`. All credential fields in config structs carry `omitempty`. Package-level URL vars (`openMeteoBaseURL`, `geocodingBaseURL`, `hackerNewsBaseURL`) are overridable in tests via httptest servers.
+- **Security**: `api.Server.Start()` uses `http.Server` with 15s read/write and 60s idle timeouts (not bare `ListenAndServe`). Config dir created with `0750`, files with `0600`. All credential fields in config structs carry `omitempty`. Package-level URL vars (`openMeteoBaseURL`, `geocodingBaseURL`, `hackerNewsBaseURL`, `githubAPIBaseURL`, `jiraAPIPath`, `notionAPIBaseURL`) are overridable in tests via httptest servers.
+- **TUI** (`cmd/tui`): bubbletea model with `applyKey` (pure, testable). Key bindings: tabs (←/→/1-7), scroll (↑/↓), todo select/done (space/enter), in-progress toggle (i), delete (d), new todo (n+enter), refresh (r), quit (q), pomodoro start/stop (p). Pomodoro timer config: `pomodoro.work_minutes`, `pomodoro.break_minutes`, `pomodoro.enabled`.
+- **Real APIs**: GitHub (`/notifications`), Jira (`/rest/api/3/search` basic auth), Notion (`/v1/databases/{id}/query` bearer). All use cache→mock fallback chain on error.
 
 ### Linting
 
