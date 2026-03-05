@@ -1,18 +1,22 @@
 import type { EmailMessage } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
+import { StatusBadge } from '@/components/StatusBadge';
 
-export function EmailSection({ emails }: { emails: EmailMessage[] }) {
+export function EmailSection({ emails, isLive }: { emails: EmailMessage[]; isLive?: boolean }) {
   const unread = emails?.filter(e => e.is_unread) ?? [];
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Email</h3>
-        <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-          unread.length > 0 ? 'bg-red-900 text-red-300' : 'bg-green-900 text-green-300'
-        }`}>
-          {unread.length}
-        </span>
+        <div className="flex items-center gap-2">
+          <StatusBadge live={isLive} />
+          <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+            unread.length > 0 ? 'bg-red-900 text-red-300' : 'bg-green-900 text-green-300'
+          }`}>
+            {unread.length}
+          </span>
+        </div>
       </div>
       <div className="divide-y divide-gray-800">
         {unread.length === 0 ? (

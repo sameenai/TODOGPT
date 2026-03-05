@@ -1,14 +1,15 @@
 import type { NewsItem } from '@/lib/types';
 import { timeAgo } from '@/lib/utils';
+import { StatusBadge } from '@/components/StatusBadge';
 
-export function NewsSection({ news }: { news: NewsItem[] }) {
+export function NewsSection({ news, isLive }: { news: NewsItem[]; isLive?: boolean }) {
   if (!news?.length) return null;
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden mb-4">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Top News</h3>
-        <span className="text-xs text-cyan-400 font-semibold">LIVE</span>
+        <StatusBadge live={isLive} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-x divide-y divide-gray-800">
         {news.slice(0, 8).map((item, i) => (

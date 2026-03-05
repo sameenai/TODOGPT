@@ -24,6 +24,9 @@ func NewNewsService(cfg config.NewsConfig) *NewsService {
 	return &NewsService{cfg: cfg}
 }
 
+// IsLive returns true because news uses the Hacker News public API (no key required).
+func (s *NewsService) IsLive() bool { return true }
+
 // hnItem is a Hacker News story item.
 type hnItem struct {
 	ID    int    `json:"id"`

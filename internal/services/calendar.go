@@ -18,6 +18,9 @@ func NewCalendarService(cfg config.GoogleConfig) *CalendarService {
 	return &CalendarService{cfg: cfg}
 }
 
+// IsLive returns false — Google Calendar API is not yet implemented; data is demo only.
+func (s *CalendarService) IsLive() bool { return false }
+
 func (s *CalendarService) Fetch() ([]models.CalendarEvent, error) {
 	// When Google credentials are configured, this would use the Google Calendar API.
 	// For now, return demo events to show the dashboard layout.

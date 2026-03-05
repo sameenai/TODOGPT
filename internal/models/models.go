@@ -181,6 +181,8 @@ type Briefing struct {
 	SlackUnread   int                  `json:"slack_unread"`
 	Summary       string               `json:"summary,omitempty"`
 	GeneratedAt   time.Time            `json:"generated_at"`
+	// IntegrationStatuses maps integration name → true (live data) / false (demo data).
+	IntegrationStatuses map[string]bool `json:"integration_statuses"`
 }
 
 // DashboardUpdate is sent over WebSocket for real-time updates.

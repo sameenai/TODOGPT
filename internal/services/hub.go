@@ -202,6 +202,18 @@ func (h *Hub) FetchAll() *models.Briefing {
 
 	wg.Wait()
 
+	// Record which integrations are serving live data vs. demo/mock data.
+	briefing.IntegrationStatuses = map[string]bool{
+		"weather":  h.Weather.IsLive(),
+		"news":     h.News.IsLive(),
+		"calendar": h.Calendar.IsLive(),
+		"email":    h.Email.IsLive(),
+		"slack":    h.Slack.IsLive(),
+		"github":   h.GitHub.IsLive(),
+		"jira":     h.Jira.IsLive(),
+		"notion":   h.Notion.IsLive(),
+	}
+
 	// Auto-generate todos from signals
 	h.Todos.GenerateFromBriefing(briefing)
 	briefing.Todos = h.Todos.List()

@@ -18,6 +18,9 @@ func NewSlackService(cfg config.SlackConfig) *SlackService {
 	return &SlackService{cfg: cfg}
 }
 
+// IsLive returns false — Slack API is not yet implemented; data is demo only.
+func (s *SlackService) IsLive() bool { return false }
+
 func (s *SlackService) Fetch() ([]models.SlackMessage, error) {
 	// When Slack tokens are configured, this would connect to the Slack API
 	// using the Bot Token for reading messages and App Token for Socket Mode.
