@@ -20,6 +20,7 @@ type Hub struct {
 	GitHub   *GitHubService
 	Jira     *JiraService
 	Notion   *NotionService
+	AI       *AIService
 	Todos    *TodoService
 
 	cfg       *config.Config
@@ -39,6 +40,7 @@ func NewHub(cfg *config.Config) *Hub {
 		GitHub:   NewGitHubService(cfg.GitHub),
 		Jira:     NewJiraService(cfg.Jira),
 		Notion:   NewNotionService(cfg.Notion),
+		AI:       NewAIService(cfg.AI),
 		Todos:    todosvc,
 		cfg:      cfg,
 		stopCh:   make(chan struct{}),
@@ -203,6 +205,13 @@ func (h *Hub) FetchAll() *models.Briefing {
 	// Auto-generate todos from signals
 	h.Todos.GenerateFromBriefing(briefing)
 	briefing.Todos = h.Todos.List()
+
+	// Generate AI summary (non-blocking — failures are silently ignored)
+	if summary, err := h.AI.Summarize(briefing); err == nil && summary != "" {
+		briefing.Summary = summary
+	} else if err != nil {
+		log.Printf("AI summary error: %v", err)
+	}
 
 	return briefing
 }

@@ -151,6 +151,7 @@ async function deleteTodo(id) {
 // ---- Render All ----
 function renderAll() {
     if (!briefingData) return;
+    renderSummary();
     renderWeather();
     renderCalendar();
     renderNews();
@@ -162,6 +163,15 @@ function renderAll() {
     renderTodos();
     updateScores();
     updateInboxZero();
+}
+
+// ---- AI Summary ----
+function renderSummary() {
+    const summary = briefingData.summary;
+    const banner = document.getElementById('summary-banner');
+    if (!summary || !banner) return;
+    banner.style.display = 'block';
+    document.getElementById('summary-content').textContent = summary;
 }
 
 // ---- Weather ----

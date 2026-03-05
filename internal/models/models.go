@@ -179,6 +179,7 @@ type Briefing struct {
 	Todos         []TodoItem           `json:"todos"`
 	EmailCount    int                  `json:"email_count"`
 	SlackUnread   int                  `json:"slack_unread"`
+	Summary       string               `json:"summary,omitempty"`
 	GeneratedAt   time.Time            `json:"generated_at"`
 }
 

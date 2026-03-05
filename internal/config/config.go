@@ -16,6 +16,7 @@ type Config struct {
 	GitHub   GitHubConfig   `json:"github"`
 	Jira     JiraConfig     `json:"jira"`
 	Notion   NotionConfig   `json:"notion"`
+	AI       AIConfig       `json:"ai"`
 	Pomodoro PomodoroConfig `json:"pomodoro"`
 }
 
@@ -87,6 +88,12 @@ type NotionConfig struct {
 	Enabled    bool   `json:"enabled"`
 }
 
+type AIConfig struct {
+	APIKey  string `json:"api_key,omitempty"`
+	Model   string `json:"model"`
+	Enabled bool   `json:"enabled"`
+}
+
 type PomodoroConfig struct {
 	WorkMinutes  int  `json:"work_minutes"`
 	BreakMinutes int  `json:"break_minutes"`
@@ -130,6 +137,10 @@ func DefaultConfig() *Config {
 			Enabled: false,
 		},
 		Notion: NotionConfig{
+			Enabled: false,
+		},
+		AI: AIConfig{
+			Model:   "claude-sonnet-4-6",
 			Enabled: false,
 		},
 		Pomodoro: PomodoroConfig{
