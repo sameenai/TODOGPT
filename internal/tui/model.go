@@ -231,7 +231,7 @@ func (m model) applyKey(key string) model {
 		m.scroll = 0
 		m.selectedTodo = 0
 
-	case "1", "2", "3", "4", "5", "6", "7":
+	case "1", "2", "3", "4", "5", "6", "7", "8":
 		m.activeTab = int(key[0] - '1')
 		m.scroll = 0
 		m.selectedTodo = 0
@@ -518,7 +518,7 @@ func (m model) viewStatusBar() string {
 		keys = append(keys, "↑/↓ scroll")
 	}
 	if !m.inputMode && !m.filterMode {
-		keys = append(keys, "←/→ tab", "1-7 jump", "r refresh", "q quit")
+		keys = append(keys, "←/→ tab", "1-8 jump", "r refresh", "q quit")
 	}
 	left := "  " + strings.Join(keys, "  ·  ")
 
@@ -556,6 +556,8 @@ func (m model) viewSection(height int) string {
 
 	var raw string
 	switch m.activeTab {
+	case secSummary:
+		raw = m.renderSummary()
 	case secNews:
 		raw = m.renderNews()
 	case secWeather:

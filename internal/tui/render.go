@@ -8,6 +8,33 @@ import (
 	"github.com/todogpt/daily-briefing/internal/models"
 )
 
+func (m model) renderSummary() string {
+	if m.briefing.Summary == "" {
+		return dimStyle.Render("  No AI summary available. Set ANTHROPIC_API_KEY and enable ai.enabled in config.") + "\n"
+	}
+	var sb strings.Builder
+	sb.WriteString(titleStyle.Render("  Today's Briefing") + "\n\n")
+	// Word-wrap the summary at ~80 chars
+	words := strings.Fields(m.briefing.Summary)
+	line := "  "
+	for _, w := range words {
+		if len(line)+len(w)+1 > 80 {
+			sb.WriteString(line + "\n")
+			line = "  " + w
+		} else {
+			if line == "  " {
+				line += w
+			} else {
+				line += " " + w
+			}
+		}
+	}
+	if line != "  " {
+		sb.WriteString(line + "\n")
+	}
+	return sb.String()
+}
+
 func (m model) renderNews() string {
 	news := m.briefing.News
 	if len(news) == 0 {

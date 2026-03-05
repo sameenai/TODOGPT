@@ -9,7 +9,8 @@ import (
 
 // Section indices.
 const (
-	secNews = iota
+	secSummary = iota
+	secNews
 	secWeather
 	secCalendar
 	secEmail
@@ -30,7 +31,7 @@ const (
 var sortModeNames = [numSortModes]string{"priority", "status", "title"}
 
 var sectionNames = [numSections]string{
-	"News", "Weather", "Calendar", "Email", "Slack", "GitHub", "Todos",
+	"Summary", "News", "Weather", "Calendar", "Email", "Slack", "GitHub", "Todos",
 }
 
 // countPending returns the number of pending/in-progress todos.

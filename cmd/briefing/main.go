@@ -44,6 +44,7 @@ func run() error {
 
 func printAll(b *models.Briefing) {
 	printHeaderAt(time.Now())
+	printSummary(b)
 	printWeather(b)
 	printCalendar(b)
 	printNews(b)
@@ -67,6 +68,14 @@ func printHeaderAt(now time.Time) {
 	fmt.Printf("%s%s%s\n", colorBold, strings.Repeat("=", 60), colorReset)
 	fmt.Printf("  %s%s%s! Today is %s\n", colorBold, greeting, colorReset, now.Format("Monday, January 2, 2006"))
 	fmt.Printf("%s%s%s\n\n", colorBold, strings.Repeat("=", 60), colorReset)
+}
+
+func printSummary(b *models.Briefing) {
+	if b.Summary == "" {
+		return
+	}
+	fmt.Printf("%s  AI BRIEFING SUMMARY%s\n", colorBold+colorCyan, colorReset)
+	fmt.Printf("%s  %s%s\n\n", colorBold, b.Summary, colorReset)
 }
 
 func printWeather(b *models.Briefing) {
