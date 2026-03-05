@@ -128,3 +128,14 @@ clean:
 
 init: build
 	./bin/server --init
+
+# ── Frontend (Next.js + AI SDK) ───────────────────────────────────────────────
+
+frontend-install:
+	cd frontend && npm install
+
+frontend-dev:
+	cd frontend && npm run dev
+
+frontend-build:
+	cd frontend && npm run build
