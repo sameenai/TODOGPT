@@ -34,23 +34,26 @@ tui: build
 
 # ── Test & Coverage ───────────────────────────────────────────────────────────
 
+GO_PKGS := $(shell go list ./... | grep -v '/frontend/')
+
 test:
-	go test -race -count=1 -timeout 120s ./...
+	go test -race -count=1 -timeout 120s $(GO_PKGS)
 
 test-verbose:
-	go test -v -race -count=1 -timeout 120s ./...
+	go test -v -race -count=1 -timeout 120s $(GO_PKGS)
 
 test-coverage:
-	go test -race -coverprofile=coverage.out -covermode=atomic ./...
+	go test -race -coverprofile=coverage.out -covermode=atomic $(GO_PKGS)
 	go tool cover -func=coverage.out
-	@TOTAL=$$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $$3); print int($$3)}'); \
-	echo ""; \
-	echo "Total coverage: $${TOTAL}%  (threshold: $(COVERAGE_THRESHOLD)%)"; \
-	if [ "$$TOTAL" -lt "$(COVERAGE_THRESHOLD)" ]; then \
-		echo "FAIL: coverage below $(COVERAGE_THRESHOLD)%" && exit 1; \
-	else \
-		echo "PASS: coverage meets threshold"; \
-	fi
+	@go tool cover -func=coverage.out | awk '/^total:/ { \
+		gsub(/%/, "", $$3); pct=$$3+0; \
+		printf "\nTotal coverage: %.1f%%  (threshold: $(COVERAGE_THRESHOLD)%%)\n", pct; \
+		if (pct < $(COVERAGE_THRESHOLD)) { \
+			print "FAIL: coverage below $(COVERAGE_THRESHOLD)%"; exit 1 \
+		} else { \
+			print "PASS: coverage meets threshold" \
+		} \
+	}'
 	@echo ""
 	@echo "HTML report: go tool cover -html=coverage.out"
 
@@ -62,7 +65,7 @@ lint: vet
 	@echo "Formatting OK"
 
 vet:
-	go vet ./...
+	go vet $(GO_PKGS)
 
 # ── Security audit ────────────────────────────────────────────────────────────
 

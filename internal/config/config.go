@@ -51,6 +51,9 @@ type GoogleConfig struct {
 	TokenFile       string `json:"token_file"`
 	CalendarEnabled bool   `json:"calendar_enabled"`
 	GmailEnabled    bool   `json:"gmail_enabled"`
+	// ICalURL is a private iCalendar subscription URL (works with Google Calendar,
+	// iCloud, Outlook — no OAuth required). When set, real calendar data is fetched.
+	ICalURL string `json:"ical_url,omitempty"`
 }
 
 type SlackConfig struct {
