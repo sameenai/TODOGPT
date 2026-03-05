@@ -87,6 +87,18 @@ type JiraTicket struct {
 	Type     string    `json:"type"`
 }
 
+// NotionPage represents a page/task from a Notion database.
+type NotionPage struct {
+	ID        string     `json:"id"`
+	Title     string     `json:"title"`
+	Status    string     `json:"status"`
+	Priority  string     `json:"priority"`
+	DueDate   *time.Time `json:"due_date,omitempty"`
+	URL       string     `json:"url"`
+	Database  string     `json:"database"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
 // TodoItem represents a task in the interactive todo list.
 type TodoItem struct {
 	ID          string     `json:"id"`
@@ -163,6 +175,7 @@ type Briefing struct {
 	SlackMessages []SlackMessage       `json:"slack_messages"`
 	GitHubNotifs  []GitHubNotification `json:"github_notifications"`
 	JiraTickets   []JiraTicket         `json:"jira_tickets"`
+	NotionPages   []NotionPage         `json:"notion_pages"`
 	Todos         []TodoItem           `json:"todos"`
 	EmailCount    int                  `json:"email_count"`
 	SlackUnread   int                  `json:"slack_unread"`

@@ -18,6 +18,8 @@ type Hub struct {
 	Slack    *SlackService
 	Email    *EmailService
 	GitHub   *GitHubService
+	Jira     *JiraService
+	Notion   *NotionService
 	Todos    *TodoService
 
 	cfg       *config.Config
@@ -35,6 +37,8 @@ func NewHub(cfg *config.Config) *Hub {
 		Slack:    NewSlackService(cfg.Slack),
 		Email:    NewEmailService(cfg.Email),
 		GitHub:   NewGitHubService(cfg.GitHub),
+		Jira:     NewJiraService(cfg.Jira),
+		Notion:   NewNotionService(cfg.Notion),
 		Todos:    todosvc,
 		cfg:      cfg,
 		stopCh:   make(chan struct{}),

@@ -348,3 +348,158 @@ func TestTruncate(t *testing.T) {
 		}
 	}
 }
+
+// ── Jira todo generation ──────────────────────────────────────────────────────
+
+func TestGenerateFromBriefingJira(t *testing.T) {
+	svc := NewTodoService()
+	due := time.Now().AddDate(0, 0, 3)
+	b := &models.Briefing{
+		JiraTickets: []models.JiraTicket{
+			{Key: "PROJ-1", Summary: "Fix the login", Status: "To Do", Priority: "Critical", Type: "Bug", DueDate: due},
+			{Key: "PROJ-2", Summary: "Add dark mode", Status: "In Progress", Priority: "High", Type: "Story"},
+			{Key: "PROJ-3", Summary: "Write docs", Status: "To Do", Priority: "Low", Type: "Task"},
+			{Key: "PROJ-4", Summary: "Medium ticket", Status: "To Do", Priority: "Medium", Type: "Task"},
+		},
+	}
+	svc.GenerateFromBriefing(b)
+	items := svc.List()
+	if len(items) != 4 {
+		t.Fatalf("expected 4 jira todos, got %d", len(items))
+	}
+
+	// Check priority mapping
+	byKey := make(map[string]models.TodoItem)
+	for _, item := range items {
+		byKey[item.SourceID] = item
+	}
+
+	if byKey["PROJ-1"].Priority != models.PriorityUrgent {
+		t.Errorf("Critical should map to PriorityUrgent, got %v", byKey["PROJ-1"].Priority)
+	}
+	if byKey["PROJ-2"].Priority != models.PriorityHigh {
+		t.Errorf("High should map to PriorityHigh, got %v", byKey["PROJ-2"].Priority)
+	}
+	if byKey["PROJ-3"].Priority != models.PriorityLow {
+		t.Errorf("Low should map to PriorityLow, got %v", byKey["PROJ-3"].Priority)
+	}
+	if byKey["PROJ-4"].Priority != models.PriorityMedium {
+		t.Errorf("Medium should map to PriorityMedium, got %v", byKey["PROJ-4"].Priority)
+	}
+
+	// Check source fields
+	t1 := byKey["PROJ-1"]
+	if t1.Source != "jira" {
+		t.Errorf("expected source=jira, got %s", t1.Source)
+	}
+	if t1.DueDate == nil {
+		t.Error("expected non-nil DueDate")
+	}
+}
+
+func TestGenerateFromBriefingJiraDedup(t *testing.T) {
+	svc := NewTodoService()
+	b := &models.Briefing{
+		JiraTickets: []models.JiraTicket{
+			{Key: "PROJ-10", Summary: "Task", Status: "To Do", Priority: "High"},
+		},
+	}
+	svc.GenerateFromBriefing(b)
+	svc.GenerateFromBriefing(b) // second call should not add duplicate
+	items := svc.List()
+	if len(items) != 1 {
+		t.Errorf("expected 1 item after dedup, got %d", len(items))
+	}
+}
+
+func TestGenerateFromBriefingJiraPriorityBlocker(t *testing.T) {
+	svc := NewTodoService()
+	b := &models.Briefing{
+		JiraTickets: []models.JiraTicket{
+			{Key: "B-1", Summary: "Blocker", Status: "To Do", Priority: "Blocker"},
+		},
+	}
+	svc.GenerateFromBriefing(b)
+	items := svc.List()
+	if items[0].Priority != models.PriorityUrgent {
+		t.Errorf("Blocker should map to PriorityUrgent, got %v", items[0].Priority)
+	}
+}
+
+// ── Notion todo generation ────────────────────────────────────────────────────
+
+func TestGenerateFromBriefingNotion(t *testing.T) {
+	svc := NewTodoService()
+	due := time.Now().AddDate(0, 0, 2)
+	b := &models.Briefing{
+		NotionPages: []models.NotionPage{
+			{ID: "n1", Title: "Write review", Status: "In Progress", Priority: "Urgent", DueDate: &due, URL: "https://notion.so/n1"},
+			{ID: "n2", Title: "Research topic", Status: "Not Started", Priority: "High"},
+			{ID: "n3", Title: "Low priority task", Status: "Not Started", Priority: "Low"},
+			{ID: "n4", Title: "No priority", Status: "Not Started"},
+		},
+	}
+	svc.GenerateFromBriefing(b)
+	items := svc.List()
+	if len(items) != 4 {
+		t.Fatalf("expected 4 notion todos, got %d", len(items))
+	}
+
+	byID := make(map[string]models.TodoItem)
+	for _, item := range items {
+		byID[item.SourceID] = item
+	}
+
+	if byID["n1"].Priority != models.PriorityUrgent {
+		t.Errorf("Urgent should map to PriorityUrgent, got %v", byID["n1"].Priority)
+	}
+	if byID["n2"].Priority != models.PriorityHigh {
+		t.Errorf("High should map to PriorityHigh, got %v", byID["n2"].Priority)
+	}
+	if byID["n3"].Priority != models.PriorityLow {
+		t.Errorf("Low should map to PriorityLow, got %v", byID["n3"].Priority)
+	}
+	if byID["n4"].Priority != models.PriorityMedium {
+		t.Errorf("no priority should default to PriorityMedium, got %v", byID["n4"].Priority)
+	}
+
+	n1 := byID["n1"]
+	if n1.Source != "notion" {
+		t.Errorf("expected source=notion, got %s", n1.Source)
+	}
+	if n1.DueDate == nil {
+		t.Error("expected non-nil DueDate")
+	}
+	if n1.SourceURL != "https://notion.so/n1" {
+		t.Errorf("unexpected SourceURL: %s", n1.SourceURL)
+	}
+}
+
+func TestGenerateFromBriefingNotionDedup(t *testing.T) {
+	svc := NewTodoService()
+	b := &models.Briefing{
+		NotionPages: []models.NotionPage{
+			{ID: "np-1", Title: "Task", Status: "Not Started", Priority: "Medium"},
+		},
+	}
+	svc.GenerateFromBriefing(b)
+	svc.GenerateFromBriefing(b)
+	items := svc.List()
+	if len(items) != 1 {
+		t.Errorf("expected 1 item after dedup, got %d", len(items))
+	}
+}
+
+func TestGenerateFromBriefingNotionCriticalPriority(t *testing.T) {
+	svc := NewTodoService()
+	b := &models.Briefing{
+		NotionPages: []models.NotionPage{
+			{ID: "c1", Title: "Critical task", Status: "Not Started", Priority: "Critical"},
+		},
+	}
+	svc.GenerateFromBriefing(b)
+	items := svc.List()
+	if items[0].Priority != models.PriorityUrgent {
+		t.Errorf("Critical should map to PriorityUrgent, got %v", items[0].Priority)
+	}
+}

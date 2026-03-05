@@ -27,14 +27,16 @@ func freePort(t *testing.T) int {
 	return port
 }
 
-func testServer() *Server {
+func testServer(t *testing.T) *Server {
+	t.Helper()
 	cfg := config.DefaultConfig()
+	cfg.Server.DataDir = t.TempDir()
 	hub := services.NewHub(cfg)
 	return NewServer(hub, "localhost", 8080)
 }
 
 func TestNewServer(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	if s == nil {
 		t.Fatal("expected non-nil server")
 	}
@@ -50,7 +52,7 @@ func TestNewServer(t *testing.T) {
 }
 
 func TestHandleBriefing(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	req := httptest.NewRequest("GET", "/api/briefing", nil)
 	w := httptest.NewRecorder()
 
@@ -77,7 +79,7 @@ func TestHandleBriefing(t *testing.T) {
 }
 
 func TestHandleWeather(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	req := httptest.NewRequest("GET", "/api/weather", nil)
 	w := httptest.NewRecorder()
 
@@ -98,7 +100,7 @@ func TestHandleWeather(t *testing.T) {
 }
 
 func TestHandleEvents(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	req := httptest.NewRequest("GET", "/api/events", nil)
 	w := httptest.NewRecorder()
 
@@ -119,7 +121,7 @@ func TestHandleEvents(t *testing.T) {
 }
 
 func TestHandleNews(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	req := httptest.NewRequest("GET", "/api/news", nil)
 	w := httptest.NewRecorder()
 
@@ -140,7 +142,7 @@ func TestHandleNews(t *testing.T) {
 }
 
 func TestHandleEmails(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	req := httptest.NewRequest("GET", "/api/emails", nil)
 	w := httptest.NewRecorder()
 
@@ -161,7 +163,7 @@ func TestHandleEmails(t *testing.T) {
 }
 
 func TestHandleSlack(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	req := httptest.NewRequest("GET", "/api/slack", nil)
 	w := httptest.NewRecorder()
 
@@ -182,7 +184,7 @@ func TestHandleSlack(t *testing.T) {
 }
 
 func TestHandleGitHub(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	req := httptest.NewRequest("GET", "/api/github", nil)
 	w := httptest.NewRecorder()
 
@@ -203,7 +205,7 @@ func TestHandleGitHub(t *testing.T) {
 }
 
 func TestHandleTodosGet(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	req := httptest.NewRequest("GET", "/api/todos", nil)
 	w := httptest.NewRecorder()
 
@@ -221,7 +223,7 @@ func TestHandleTodosGet(t *testing.T) {
 }
 
 func TestHandleTodosPost(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	go s.wsHub.Run()
 
 	body := `{"title": "New Task", "priority": 2}`
@@ -249,7 +251,7 @@ func TestHandleTodosPost(t *testing.T) {
 }
 
 func TestHandleTodosPostInvalidJSON(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	req := httptest.NewRequest("POST", "/api/todos", strings.NewReader("invalid json"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -263,7 +265,7 @@ func TestHandleTodosPostInvalidJSON(t *testing.T) {
 }
 
 func TestHandleTodosMethodNotAllowed(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	req := httptest.NewRequest("DELETE", "/api/todos", nil)
 	w := httptest.NewRecorder()
 
@@ -276,7 +278,7 @@ func TestHandleTodosMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleTodoActionUpdate(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	go s.wsHub.Run()
 
 	// Add a todo first
@@ -312,7 +314,7 @@ func TestHandleTodoActionUpdate(t *testing.T) {
 }
 
 func TestHandleTodoActionDelete(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	go s.wsHub.Run()
 
 	s.hub.Todos.Add(models.TodoItem{ID: "del-1", Title: "Delete Me"})
@@ -329,7 +331,7 @@ func TestHandleTodoActionDelete(t *testing.T) {
 }
 
 func TestHandleTodoActionNoID(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	req := httptest.NewRequest("DELETE", "/api/todos/", nil)
 	w := httptest.NewRecorder()
 
@@ -342,7 +344,7 @@ func TestHandleTodoActionNoID(t *testing.T) {
 }
 
 func TestHandleTodoActionBadMethod(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	req := httptest.NewRequest("GET", "/api/todos/some-id", nil)
 	w := httptest.NewRecorder()
 
@@ -355,7 +357,7 @@ func TestHandleTodoActionBadMethod(t *testing.T) {
 }
 
 func TestHandleTodoActionInvalidJSON(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	req := httptest.NewRequest("PATCH", "/api/todos/some-id", strings.NewReader("bad json"))
 	w := httptest.NewRecorder()
 
@@ -368,7 +370,7 @@ func TestHandleTodoActionInvalidJSON(t *testing.T) {
 }
 
 func TestHandleSignals(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	req := httptest.NewRequest("GET", "/api/signals", nil)
 	w := httptest.NewRecorder()
 
@@ -404,7 +406,7 @@ func TestHandleSignals(t *testing.T) {
 }
 
 func TestCORSHeaders(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	handler := s.withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -423,7 +425,7 @@ func TestCORSHeaders(t *testing.T) {
 }
 
 func TestCORSPreflight(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	handler := s.withCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -441,7 +443,7 @@ func TestCORSPreflight(t *testing.T) {
 func TestHandleDashboard(t *testing.T) {
 	// This test will fail if run from a directory that doesn't contain web/templates/index.html
 	// It's included for completeness but may need to be run from project root.
-	s := testServer()
+	s := testServer(t)
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
 
@@ -465,7 +467,7 @@ func TestMustJSON(t *testing.T) {
 }
 
 func TestFullRouteIntegration(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	go s.wsHub.Run()
 
 	// Test the mux routes directly
@@ -498,7 +500,7 @@ func TestFullRouteIntegration(t *testing.T) {
 }
 
 func TestTodoPostAndList(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	go s.wsHub.Run()
 
 	// POST a new todo
@@ -533,7 +535,7 @@ func TestTodoPostAndList(t *testing.T) {
 }
 
 func TestHandler(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	handler := s.Handler()
 	if handler == nil {
 		t.Fatal("expected non-nil handler")
@@ -552,7 +554,7 @@ func TestHandler(t *testing.T) {
 }
 
 func TestBridgeUpdatesAndWebSocket(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
@@ -582,7 +584,7 @@ func TestBridgeUpdatesAndWebSocket(t *testing.T) {
 }
 
 func TestBridgeUpdatesSkipsMarshalError(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
@@ -633,7 +635,7 @@ func TestStartListensAndServes(t *testing.T) {
 }
 
 func TestHandleTodoActionPUT(t *testing.T) {
-	s := testServer()
+	s := testServer(t)
 	go s.wsHub.Run()
 
 	s.hub.Todos.Add(models.TodoItem{ID: "put-1", Title: "Original", Priority: models.PriorityLow})
