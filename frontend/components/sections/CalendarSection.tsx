@@ -1,7 +1,7 @@
 import type { CalendarEvent } from '@/lib/types';
 import { formatTime } from '@/lib/utils';
 import { StatusBadge } from '@/components/StatusBadge';
-import { NotAvailable } from '@/components/ConnectPrompt';
+import { ConnectPrompt } from '@/components/ConnectPrompt';
 
 export function CalendarSection({ events, isLive, isAvailable }: {
   events: CalendarEvent[];
@@ -41,9 +41,18 @@ export function CalendarSection({ events, isLive, isAvailable }: {
             </div>
           ))}
         </div>
-      ) : isAvailable === false ? (
-        <NotAvailable name="Calendar" />
-      ) : null}
+      ) : (
+        <ConnectPrompt
+          title="Calendar"
+          steps={[
+            { text: 'Open Google Calendar → Settings (⚙) → the calendar you want → Integrate calendar' },
+            { text: 'Copy the Secret address in iCal format URL (keep it private — it grants read access)' },
+            { text: 'iCloud: System Settings → Apple ID → iCloud → Passwords & Keychain → share calendar → copy link', },
+            { text: 'Add to ~/.daily-briefing/config.json:' },
+          ]}
+          configSnippet={`"google": {\n  "ical_url": "https://calendar.google.com/calendar/ical/...secret.../basic.ics"\n}`}
+        />
+      )}
     </div>
   );
 }

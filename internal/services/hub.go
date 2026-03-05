@@ -219,7 +219,7 @@ func (h *Hub) FetchAll() *models.Briefing {
 	briefing.IntegrationAvailable = map[string]bool{
 		"weather":  true,
 		"news":     true,
-		"calendar": false, // Google Calendar API not yet implemented
+		"calendar": true,  // iCal URL subscription supported
 		"email":    false, // Gmail/IMAP not yet implemented
 		"slack":    false, // Slack API not yet implemented
 		"github":   true,

@@ -1771,3 +1771,94 @@ func TestDownKeyBoundsWithFilter(t *testing.T) {
 		t.Errorf("selectedTodo %d out of bounds for filtered list len %d", m.selectedTodo, len(filtered))
 	}
 }
+
+func TestRenderSummaryEmpty(t *testing.T) {
+	m := loadedModel()
+	m.briefing.Summary = ""
+	out := m.renderSummary()
+	if !strings.Contains(out, "No AI summary") {
+		t.Errorf("expected no-summary message, got %q", out)
+	}
+}
+
+func TestRenderSummaryWithContent(t *testing.T) {
+	m := loadedModel()
+	m.briefing.Summary = "Today looks productive."
+	out := m.renderSummary()
+	if !strings.Contains(out, "Today looks productive.") {
+		t.Errorf("expected summary content in output, got %q", out)
+	}
+}
+
+func TestRenderSummaryLongTextWraps(t *testing.T) {
+	m := loadedModel()
+	// 40+ words to trigger line-wrapping logic
+	m.briefing.Summary = strings.Repeat("word ", 40)
+	out := m.renderSummary()
+	if !strings.Contains(out, "word") {
+		t.Error("expected wrapped summary content")
+	}
+}
+
+func TestViewSectionSummaryTab(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secSummary
+	out := m.viewSection(40)
+	if out == "" {
+		t.Error("expected non-empty output for summary tab")
+	}
+}
+
+func TestJumpToSummaryTab(t *testing.T) {
+	m := loadedModel()
+	m = m.applyKey("1")
+	if m.activeTab != secSummary {
+		t.Errorf("expected secSummary after pressing '1', got %d", m.activeTab)
+	}
+}
+
+func TestRenderEmailNarrowWidth(t *testing.T) {
+	m := loadedModel()
+	m.width = 10 // forces maxSubj = 10 (clamped from 2)
+	out := m.renderEmail()
+	if out == "" {
+		t.Error("expected non-empty email render at narrow width")
+	}
+}
+
+func TestRenderSlackNarrowWidth(t *testing.T) {
+	m := loadedModel()
+	m.width = 10 // forces maxText = 10 (clamped from -12)
+	out := m.renderSlack()
+	if out == "" {
+		t.Error("expected non-empty slack render at narrow width")
+	}
+}
+
+func TestRenderGitHubNarrowWidth(t *testing.T) {
+	m := loadedModel()
+	m.width = 10 // forces maxTitle = 10 (clamped from -4)
+	out := m.renderGitHub()
+	if out == "" {
+		t.Error("expected non-empty github render at narrow width")
+	}
+}
+
+func TestRenderTodosFilterMode(t *testing.T) {
+	m := loadedModel()
+	m.filterMode = true
+	m.filterText = "Rep"
+	out := m.renderTodos()
+	if !strings.Contains(out, "Filter todos") {
+		t.Errorf("expected 'Filter todos' header in filterMode render, got: %q", out)
+	}
+}
+
+func TestRenderTodosFilterTextInHeader(t *testing.T) {
+	m := loadedModel()
+	m.filterText = "Reply" // matches "Reply to Alice" todo
+	out := m.renderTodos()
+	if !strings.Contains(out, "filtered:") {
+		t.Errorf("expected 'filtered:' in header when filterText set and todos match, got: %q", out)
+	}
+}
