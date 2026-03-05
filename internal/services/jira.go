@@ -26,6 +26,11 @@ func NewJiraService(cfg config.JiraConfig) *JiraService {
 	return &JiraService{cfg: cfg}
 }
 
+// IsLive returns true when Jira credentials are fully configured.
+func (s *JiraService) IsLive() bool {
+	return s.cfg.Enabled && s.cfg.BaseURL != "" && s.cfg.Token != ""
+}
+
 func (s *JiraService) Fetch() ([]models.JiraTicket, error) {
 	if !s.cfg.Enabled || s.cfg.BaseURL == "" || s.cfg.Token == "" {
 		return s.mockTickets(), nil
@@ -68,7 +73,7 @@ type jiraSearchResponse struct {
 			Assignee *struct {
 				DisplayName string `json:"displayName"`
 			} `json:"assignee"`
-			DueDate  string `json:"duedate"`
+			DueDate   string `json:"duedate"`
 			IssueType struct {
 				Name string `json:"name"`
 			} `json:"issuetype"`

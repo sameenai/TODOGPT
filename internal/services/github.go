@@ -24,6 +24,9 @@ func NewGitHubService(cfg config.GitHubConfig) *GitHubService {
 	return &GitHubService{cfg: cfg}
 }
 
+// IsLive returns true when a GitHub token is configured and the integration is enabled.
+func (s *GitHubService) IsLive() bool { return s.cfg.Enabled && s.cfg.Token != "" }
+
 // githubNotification is the raw API response shape from GET /notifications.
 type githubNotification struct {
 	ID   string `json:"id"`

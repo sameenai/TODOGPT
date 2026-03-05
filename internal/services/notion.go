@@ -27,6 +27,11 @@ func NewNotionService(cfg config.NotionConfig) *NotionService {
 	return &NotionService{cfg: cfg}
 }
 
+// IsLive returns true when a Notion token and database ID are configured.
+func (s *NotionService) IsLive() bool {
+	return s.cfg.Enabled && s.cfg.Token != "" && s.cfg.DatabaseID != ""
+}
+
 func (s *NotionService) Fetch() ([]models.NotionPage, error) {
 	if !s.cfg.Enabled || s.cfg.Token == "" || s.cfg.DatabaseID == "" {
 		return s.mockPages(), nil

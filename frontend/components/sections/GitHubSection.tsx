@@ -1,16 +1,20 @@
 import type { GitHubNotification } from '@/lib/types';
 import { timeAgo } from '@/lib/utils';
+import { StatusBadge } from '@/components/StatusBadge';
 
-export function GitHubSection({ notifications }: { notifications: GitHubNotification[] }) {
+export function GitHubSection({ notifications, isLive }: { notifications: GitHubNotification[]; isLive?: boolean }) {
   const unread = notifications?.filter(n => n.unread) ?? [];
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">GitHub</h3>
-        <span className="text-xs font-bold bg-gray-800 text-gray-300 px-2 py-0.5 rounded">
-          {unread.length}
-        </span>
+        <div className="flex items-center gap-2">
+          <StatusBadge live={isLive} />
+          <span className="text-xs font-bold bg-gray-800 text-gray-300 px-2 py-0.5 rounded">
+            {unread.length}
+          </span>
+        </div>
       </div>
       <div className="divide-y divide-gray-800">
         {!unread.length ? (

@@ -21,12 +21,12 @@ func sampleJiraResponse() map[string]interface{} {
 			{
 				"key": "PROJ-42",
 				"fields": map[string]interface{}{
-					"summary":     "Fix the login bug",
-					"status":      map[string]interface{}{"name": "In Progress"},
-					"priority":    map[string]interface{}{"name": "High"},
-					"assignee":    map[string]interface{}{"displayName": "Alice"},
-					"duedate":     "2026-04-01",
-					"issuetype":   map[string]interface{}{"name": "Bug"},
+					"summary":   "Fix the login bug",
+					"status":    map[string]interface{}{"name": "In Progress"},
+					"priority":  map[string]interface{}{"name": "High"},
+					"assignee":  map[string]interface{}{"displayName": "Alice"},
+					"duedate":   "2026-04-01",
+					"issuetype": map[string]interface{}{"name": "Bug"},
 				},
 			},
 			{

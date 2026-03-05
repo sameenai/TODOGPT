@@ -1558,7 +1558,8 @@ func TestViewStatusBarTodosActions(t *testing.T) {
 		t.Errorf("expected 'new' in todos status bar, got: %q", sb)
 	}
 	if !strings.Contains(sb, "delete") {
-		t.Errorf("expected 'delete' in todos status bar, got: %q", sb)	}
+		t.Errorf("expected 'delete' in todos status bar, got: %q", sb)
+	}
 }
 
 // ── Sort/Filter tests ──────────────────────────────────────────────────────────

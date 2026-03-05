@@ -28,6 +28,9 @@ func NewWeatherService(cfg config.WeatherConfig) *WeatherService {
 	return &WeatherService{cfg: cfg}
 }
 
+// IsLive returns true because weather uses a free public API (Open-Meteo) with no key required.
+func (s *WeatherService) IsLive() bool { return true }
+
 // geocodeResponse is used to resolve a city name to coordinates via Open-Meteo.
 type geocodeResponse struct {
 	Results []struct {

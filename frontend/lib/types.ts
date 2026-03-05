@@ -123,6 +123,7 @@ export interface Briefing {
   slack_unread: number;
   summary?: string;
   generated_at: string;
+  integration_statuses: Record<string, boolean>;
 }
 
 export interface DashboardUpdate {

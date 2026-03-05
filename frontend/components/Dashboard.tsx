@@ -69,22 +69,22 @@ export function Dashboard({ initialBriefing }: Props) {
 
         {briefing.summary && <SummaryBanner summary={briefing.summary} />}
 
-        <NewsSection news={briefing.news} />
+        <NewsSection news={briefing.news} isLive={briefing.integration_statuses?.news} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
           {/* Column 1: Weather · Calendar · Notion */}
           <div className="space-y-4">
-            <WeatherSection weather={briefing.weather} />
-            <CalendarSection events={briefing.events} />
-            <NotionSection pages={briefing.notion_pages} />
+            <WeatherSection weather={briefing.weather} isLive={briefing.integration_statuses?.weather} />
+            <CalendarSection events={briefing.events} isLive={briefing.integration_statuses?.calendar} />
+            <NotionSection pages={briefing.notion_pages} isLive={briefing.integration_statuses?.notion} />
           </div>
 
           {/* Column 2: Email · Slack · GitHub · Jira */}
           <div className="space-y-4">
-            <EmailSection emails={briefing.unread_emails} />
-            <SlackSection messages={briefing.slack_messages} />
-            <GitHubSection notifications={briefing.github_notifications} />
-            <JiraSection tickets={briefing.jira_tickets} />
+            <EmailSection emails={briefing.unread_emails} isLive={briefing.integration_statuses?.email} />
+            <SlackSection messages={briefing.slack_messages} isLive={briefing.integration_statuses?.slack} />
+            <GitHubSection notifications={briefing.github_notifications} isLive={briefing.integration_statuses?.github} />
+            <JiraSection tickets={briefing.jira_tickets} isLive={briefing.integration_statuses?.jira} />
           </div>
 
           {/* Column 3: Inbox Zero · Pomodoro · Todos */}

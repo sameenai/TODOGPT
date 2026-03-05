@@ -18,6 +18,9 @@ func NewEmailService(cfg config.EmailConfig) *EmailService {
 	return &EmailService{cfg: cfg}
 }
 
+// IsLive returns false — Email/Gmail API is not yet implemented; data is demo only.
+func (s *EmailService) IsLive() bool { return false }
+
 func (s *EmailService) Fetch() ([]models.EmailMessage, error) {
 	// When IMAP/Gmail credentials are configured, this would connect and fetch emails.
 	msgs := s.mockEmails()
