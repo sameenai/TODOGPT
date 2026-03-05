@@ -71,7 +71,14 @@ func (s *Server) Start() error {
 
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
 	log.Printf("Dashboard running at http://%s", addr)
-	return http.ListenAndServe(addr, s.withCORS(s.mux))
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      s.withCORS(s.mux),
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+	return srv.ListenAndServe()
 }
 
 func (s *Server) bridgeUpdates() {

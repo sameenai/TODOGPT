@@ -52,8 +52,8 @@ type GoogleConfig struct {
 }
 
 type SlackConfig struct {
-	BotToken string   `json:"bot_token"`
-	AppToken string   `json:"app_token"`
+	BotToken string   `json:"bot_token,omitempty"`
+	AppToken string   `json:"app_token,omitempty"`
 	Channels []string `json:"channels"`
 	Enabled  bool     `json:"enabled"`
 }
@@ -62,12 +62,12 @@ type EmailConfig struct {
 	IMAPServer string `json:"imap_server"`
 	IMAPPort   int    `json:"imap_port"`
 	Username   string `json:"username"`
-	Password   string `json:"password"`
+	Password   string `json:"password,omitempty"`
 	Enabled    bool   `json:"enabled"`
 }
 
 type GitHubConfig struct {
-	Token   string   `json:"token"`
+	Token   string   `json:"token,omitempty"`
 	Repos   []string `json:"repos"`
 	Enabled bool     `json:"enabled"`
 }
@@ -75,13 +75,13 @@ type GitHubConfig struct {
 type JiraConfig struct {
 	BaseURL string `json:"base_url"`
 	Email   string `json:"email"`
-	Token   string `json:"api_token"`
+	Token   string `json:"api_token,omitempty"`
 	Project string `json:"project_key"`
 	Enabled bool   `json:"enabled"`
 }
 
 type NotionConfig struct {
-	Token      string `json:"token"`
+	Token      string `json:"token,omitempty"`
 	DatabaseID string `json:"database_id"`
 	Enabled    bool   `json:"enabled"`
 }
@@ -150,7 +150,7 @@ func Load(path string) (*Config, error) {
 		path = filepath.Join(home, ".daily-briefing", "config.json")
 	}
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path is user-supplied config file location
 	if err != nil {
 		if os.IsNotExist(err) {
 			return cfg, nil
@@ -172,7 +172,7 @@ func (c *Config) Save(path string) error {
 			return err
 		}
 		dir := filepath.Join(home, ".daily-briefing")
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0750); err != nil {
 			return err
 		}
 		path = filepath.Join(dir, "config.json")

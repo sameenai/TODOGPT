@@ -11,6 +11,9 @@ import (
 	"github.com/todogpt/daily-briefing/internal/models"
 )
 
+// hackerNewsBaseURL is package-level so tests can override it.
+var hackerNewsBaseURL = "https://hacker-news.firebaseio.com"
+
 type NewsService struct {
 	cfg   config.NewsConfig
 	cache []models.NewsItem
@@ -54,7 +57,7 @@ func (s *NewsService) Fetch() ([]models.NewsItem, error) {
 
 func (s *NewsService) fetchHackerNews(maxItems int) ([]models.NewsItem, error) {
 	// Fetch top story IDs
-	resp, err := http.Get("https://hacker-news.firebaseio.com/v0/topstories.json")
+	resp, err := http.Get(hackerNewsBaseURL + "/v0/topstories.json") // #nosec G107 -- URL base is a package-level var (overridable in tests)
 	if err != nil {
 		return nil, fmt.Errorf("HN top stories error: %w", err)
 	}
@@ -87,8 +90,8 @@ func (s *NewsService) fetchHackerNews(maxItems int) ([]models.NewsItem, error) {
 		wg.Add(1)
 		go func(idx, storyID int) {
 			defer wg.Done()
-			url := fmt.Sprintf("https://hacker-news.firebaseio.com/v0/item/%d.json", storyID)
-			r, err := http.Get(url)
+			url := fmt.Sprintf("%s/v0/item/%d.json", hackerNewsBaseURL, storyID)
+			r, err := http.Get(url) // #nosec G107 -- URL base is a package-level var (overridable in tests)
 			if err != nil {
 				return
 			}

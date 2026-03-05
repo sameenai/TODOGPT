@@ -23,7 +23,7 @@ func NewStore(path string) (*Store, error) {
 			return nil, err
 		}
 		dir := filepath.Join(home, ".daily-briefing")
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0750); err != nil {
 			return nil, err
 		}
 		path = filepath.Join(dir, "todos.json")
