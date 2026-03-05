@@ -52,11 +52,12 @@ func TestCalendarGetCachedEmpty(t *testing.T) {
 }
 
 func icalFeedWithTodayEvent(title, location string) string {
-	now := time.Now()
-	dtStart := fmt.Sprintf("%04d%02d%02dT%02d0000Z",
-		now.UTC().Year(), now.UTC().Month(), now.UTC().Day(), now.UTC().Hour())
-	dtEnd := fmt.Sprintf("%04d%02d%02dT%02d0000Z",
-		now.UTC().Year(), now.UTC().Month(), now.UTC().Day(), (now.UTC().Hour()+1)%24)
+	// Use time.Now() UTC for both start and end to guarantee the event
+	// falls within today regardless of the hour (avoids %24 wrap-around bug).
+	start := time.Now().UTC()
+	end := start.Add(time.Hour)
+	dtStart := start.Format("20060102T150405Z")
+	dtEnd := end.Format("20060102T150405Z")
 	return "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n" +
 		"BEGIN:VEVENT\r\n" +
 		"UID:test-uid-1\r\n" +
@@ -124,11 +125,13 @@ func TestCalendarFetchServerError(t *testing.T) {
 }
 
 func TestParseICalTodayEventsFiltersOld(t *testing.T) {
-	yesterday := time.Now().AddDate(0, 0, -1)
+	// Use 48 hours ago so the event (+ 1h duration) never overlaps today,
+	// even when running near midnight UTC.
+	twoDaysAgo := time.Now().Add(-48 * time.Hour).UTC()
 	feed := fmt.Sprintf("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nSUMMARY:Old\r\n"+
 		"DTSTART:%s\r\nDTEND:%s\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
-		yesterday.UTC().Format("20060102T150405Z"),
-		yesterday.UTC().Add(time.Hour).Format("20060102T150405Z"),
+		twoDaysAgo.Format("20060102T150405Z"),
+		twoDaysAgo.Add(time.Hour).Format("20060102T150405Z"),
 	)
 	events, err := parseICalTodayEvents(strings.NewReader(feed))
 	if err != nil {

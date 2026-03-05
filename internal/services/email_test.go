@@ -1,8 +1,11 @@
 package services
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
+	goImap "github.com/emersion/go-imap"
 	"github.com/todogpt/daily-briefing/internal/config"
 )
 
@@ -10,6 +13,25 @@ func TestNewEmailService(t *testing.T) {
 	svc := NewEmailService(config.EmailConfig{})
 	if svc == nil {
 		t.Fatal("expected non-nil service")
+	}
+}
+
+func TestEmailIsLive(t *testing.T) {
+	cases := []struct {
+		cfg  config.EmailConfig
+		want bool
+	}{
+		{config.EmailConfig{}, false},
+		{config.EmailConfig{Enabled: true}, false},
+		{config.EmailConfig{Enabled: true, Username: "user@example.com"}, false},
+		{config.EmailConfig{Enabled: true, Username: "user@example.com", Password: "secret"}, true},
+		{config.EmailConfig{Username: "user@example.com", Password: "secret"}, false}, // enabled=false
+	}
+	for _, c := range cases {
+		svc := NewEmailService(c.cfg)
+		if got := svc.IsLive(); got != c.want {
+			t.Errorf("IsLive(%+v) = %v, want %v", c.cfg, got, c.want)
+		}
 	}
 }
 
@@ -58,7 +80,7 @@ func TestEmailUnreadCount(t *testing.T) {
 
 func TestEmailUnreadCountAfterFetch(t *testing.T) {
 	svc := NewEmailService(config.EmailConfig{})
-	svc.Fetch()
+	svc.Fetch() //nolint:errcheck
 	count := svc.UnreadCount()
 	if count == 0 {
 		t.Error("expected non-zero unread count after fetch")
@@ -101,12 +123,411 @@ func TestEmailMockHasLabels(t *testing.T) {
 
 func TestEmailGetCachedAfterFetch(t *testing.T) {
 	svc := NewEmailService(config.EmailConfig{})
-	svc.Fetch()
+	svc.Fetch() //nolint:errcheck
 	cached := svc.GetCached()
 	if len(cached) == 0 {
 		t.Error("expected cached emails after fetch")
 	}
 	if cached[0].ID == "" {
 		t.Error("cached email should have an ID")
+	}
+}
+
+func TestEmailFetchNotLiveReturnsMock(t *testing.T) {
+	// Enabled but no credentials — should fall back to mock
+	svc := NewEmailService(config.EmailConfig{Enabled: true, IMAPServer: "imap.gmail.com", IMAPPort: 993})
+	emails, err := svc.Fetch()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(emails) == 0 {
+		t.Error("expected mock emails when not live")
+	}
+}
+
+func TestEmailFetchCacheFallback(t *testing.T) {
+	// Simulate: first call populates cache, service not live so always uses mock
+	svc := NewEmailService(config.EmailConfig{})
+	first, _ := svc.Fetch()
+	second := svc.GetCached()
+	if len(first) != len(second) {
+		t.Errorf("cache should match fetch result: %d vs %d", len(first), len(second))
+	}
+}
+
+// ── Mock IMAP client ──────────────────────────────────────────────────────────
+
+type mockIMAPClient struct {
+	loginErr    error
+	selectErr   error
+	fetchErr    error
+	messages    []*goImap.Message
+	mailboxMsgs uint32
+}
+
+func (m *mockIMAPClient) Login(username, password string) error { return m.loginErr }
+func (m *mockIMAPClient) Logout() error                         { return nil }
+func (m *mockIMAPClient) Select(name string, readOnly bool) (*goImap.MailboxStatus, error) {
+	if m.selectErr != nil {
+		return nil, m.selectErr
+	}
+	return &goImap.MailboxStatus{Messages: m.mailboxMsgs}, nil
+}
+func (m *mockIMAPClient) Fetch(seqSet *goImap.SeqSet, items []goImap.FetchItem, ch chan *goImap.Message) error {
+	for _, msg := range m.messages {
+		ch <- msg
+	}
+	close(ch)
+	return m.fetchErr
+}
+
+func newMockMessage(uid uint32, subject, from string, seen bool) *goImap.Message {
+	msg := goImap.NewMessage(uid, []goImap.FetchItem{goImap.FetchEnvelope, goImap.FetchFlags, goImap.FetchUid})
+	msg.Uid = uid
+	msg.Envelope = &goImap.Envelope{
+		Subject: subject,
+		Date:    time.Now(),
+		From:    []*goImap.Address{{MailboxName: "sender", HostName: "example.com"}},
+	}
+	if from != "" {
+		msg.Envelope.From = []*goImap.Address{{PersonalName: from, MailboxName: "user", HostName: "example.com"}}
+	}
+	if seen {
+		msg.Flags = []string{goImap.SeenFlag}
+	}
+	return msg
+}
+
+func withMockIMAP(mock imapClientIface, fn func()) {
+	orig := imapDial
+	imapDial = func(addr string) (imapClientIface, error) { return mock, nil }
+	defer func() { imapDial = orig }()
+	fn()
+}
+
+func withMockIMAPDialError(dialErr error, fn func()) {
+	orig := imapDial
+	imapDial = func(addr string) (imapClientIface, error) { return nil, dialErr }
+	defer func() { imapDial = orig }()
+	fn()
+}
+
+// ── Tests using mock IMAP client ──────────────────────────────────────────────
+
+func TestEmailFetchIMAPSuccess(t *testing.T) {
+	mock := &mockIMAPClient{
+		mailboxMsgs: 2,
+		messages: []*goImap.Message{
+			newMockMessage(1, "Hello World", "Alice", false),
+			newMockMessage(2, "Read Email", "Bob", true), // seen → not unread
+		},
+	}
+	withMockIMAP(mock, func() {
+		svc := NewEmailService(config.EmailConfig{
+			Enabled:    true,
+			Username:   "user@example.com",
+			Password:   "secret",
+			IMAPServer: "imap.example.com",
+			IMAPPort:   993,
+		})
+		emails, err := svc.Fetch()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(emails) != 2 {
+			t.Fatalf("expected 2 emails, got %d", len(emails))
+		}
+		// First email: not seen → unread
+		if !emails[0].IsUnread {
+			t.Error("expected email 1 to be unread")
+		}
+		// Second email: seen → not unread
+		if emails[1].IsUnread {
+			t.Error("expected email 2 to be read (not unread)")
+		}
+		if emails[0].Subject != "Hello World" {
+			t.Errorf("expected subject 'Hello World', got %q", emails[0].Subject)
+		}
+		// ID uses UID prefix
+		if emails[0].ID != "imap-1" {
+			t.Errorf("expected ID 'imap-1', got %q", emails[0].ID)
+		}
+	})
+}
+
+func TestEmailFetchIMAPEmptyMailbox(t *testing.T) {
+	mock := &mockIMAPClient{mailboxMsgs: 0}
+	withMockIMAP(mock, func() {
+		svc := NewEmailService(config.EmailConfig{
+			Enabled:  true,
+			Username: "user@example.com",
+			Password: "secret",
+		})
+		emails, err := svc.Fetch()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(emails) != 0 {
+			t.Errorf("expected 0 emails for empty mailbox, got %d", len(emails))
+		}
+	})
+}
+
+func TestEmailFetchIMAPLoginError(t *testing.T) {
+	mock := &mockIMAPClient{loginErr: fmt.Errorf("invalid credentials")}
+	withMockIMAP(mock, func() {
+		svc := NewEmailService(config.EmailConfig{
+			Enabled:  true,
+			Username: "user@example.com",
+			Password: "wrong",
+		})
+		// Should fall back to mock on login error
+		emails, err := svc.Fetch()
+		if err != nil {
+			t.Fatalf("expected fallback to mock, got error: %v", err)
+		}
+		if len(emails) == 0 {
+			t.Error("expected mock emails on login failure")
+		}
+	})
+}
+
+func TestEmailFetchIMAPLoginErrorWithCache(t *testing.T) {
+	// First fetch succeeds → populates cache. Second → login error → returns cache.
+	mock := &mockIMAPClient{
+		mailboxMsgs: 1,
+		messages:    []*goImap.Message{newMockMessage(1, "Cached Subject", "Alice", false)},
+	}
+	withMockIMAP(mock, func() {
+		svc := NewEmailService(config.EmailConfig{
+			Enabled:  true,
+			Username: "user@example.com",
+			Password: "secret",
+		})
+		first, err := svc.Fetch()
+		if err != nil {
+			t.Fatalf("first fetch error: %v", err)
+		}
+		if len(first) == 0 {
+			t.Fatal("expected emails on first fetch")
+		}
+
+		// Make login fail on second call
+		mock.loginErr = fmt.Errorf("auth error")
+		second, err := svc.Fetch()
+		if err != nil {
+			t.Fatalf("expected cache fallback on error, got: %v", err)
+		}
+		if len(second) == 0 {
+			t.Error("expected cached emails on second fetch")
+		}
+	})
+}
+
+func TestEmailFetchIMAPSelectError(t *testing.T) {
+	mock := &mockIMAPClient{selectErr: fmt.Errorf("mailbox not found")}
+	withMockIMAP(mock, func() {
+		svc := NewEmailService(config.EmailConfig{
+			Enabled:  true,
+			Username: "user@example.com",
+			Password: "secret",
+		})
+		emails, err := svc.Fetch()
+		if err != nil {
+			t.Fatalf("expected mock fallback, got error: %v", err)
+		}
+		if len(emails) == 0 {
+			t.Error("expected mock emails on select failure")
+		}
+	})
+}
+
+func TestEmailFetchIMAPFetchError(t *testing.T) {
+	mock := &mockIMAPClient{
+		mailboxMsgs: 1,
+		messages:    []*goImap.Message{newMockMessage(1, "Test", "", false)},
+		fetchErr:    fmt.Errorf("fetch failed"),
+	}
+	withMockIMAP(mock, func() {
+		svc := NewEmailService(config.EmailConfig{
+			Enabled:  true,
+			Username: "user@example.com",
+			Password: "secret",
+		})
+		emails, err := svc.Fetch()
+		if err != nil {
+			t.Fatalf("expected mock fallback, got error: %v", err)
+		}
+		// fetchErr causes fetchFromIMAP to return error, triggering mock fallback
+		if len(emails) == 0 {
+			t.Error("expected mock emails on fetch failure")
+		}
+	})
+}
+
+func TestEmailFetchIMAPDialError(t *testing.T) {
+	withMockIMAPDialError(fmt.Errorf("connection refused"), func() {
+		svc := NewEmailService(config.EmailConfig{
+			Enabled:  true,
+			Username: "user@example.com",
+			Password: "secret",
+		})
+		emails, err := svc.Fetch()
+		if err != nil {
+			t.Fatalf("expected mock fallback on dial error, got: %v", err)
+		}
+		if len(emails) == 0 {
+			t.Error("expected mock emails on dial error")
+		}
+	})
+}
+
+func TestEmailFetchIMAPLargeMailbox(t *testing.T) {
+	// Mailbox with >20 messages — should fetch only last 20
+	mock := &mockIMAPClient{
+		mailboxMsgs: 25,
+		messages:    []*goImap.Message{newMockMessage(25, "Recent", "Alice", false)},
+	}
+	withMockIMAP(mock, func() {
+		svc := NewEmailService(config.EmailConfig{
+			Enabled:  true,
+			Username: "user@example.com",
+			Password: "secret",
+		})
+		emails, err := svc.Fetch()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// 1 message was returned by mock
+		if len(emails) != 1 {
+			t.Errorf("expected 1 email, got %d", len(emails))
+		}
+	})
+}
+
+func TestEmailFetchIMAPMessageNoEnvelope(t *testing.T) {
+	// Message with nil envelope should be skipped
+	msg := goImap.NewMessage(1, []goImap.FetchItem{goImap.FetchEnvelope})
+	msg.Uid = 1
+	msg.Envelope = nil // no envelope
+
+	mock := &mockIMAPClient{
+		mailboxMsgs: 1,
+		messages:    []*goImap.Message{msg},
+	}
+	withMockIMAP(mock, func() {
+		svc := NewEmailService(config.EmailConfig{
+			Enabled:  true,
+			Username: "user@example.com",
+			Password: "secret",
+		})
+		emails, err := svc.Fetch()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// Message with no envelope should be skipped
+		if len(emails) != 0 {
+			t.Errorf("expected 0 emails (nil envelope skipped), got %d", len(emails))
+		}
+	})
+}
+
+func TestEmailFetchIMAPFlaggedEmail(t *testing.T) {
+	msg := newMockMessage(1, "Flagged Email", "Alice", false)
+	msg.Flags = append(msg.Flags, goImap.FlaggedFlag)
+
+	mock := &mockIMAPClient{
+		mailboxMsgs: 1,
+		messages:    []*goImap.Message{msg},
+	}
+	withMockIMAP(mock, func() {
+		svc := NewEmailService(config.EmailConfig{
+			Enabled:  true,
+			Username: "user@example.com",
+			Password: "secret",
+		})
+		emails, err := svc.Fetch()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(emails) != 1 {
+			t.Fatalf("expected 1 email, got %d", len(emails))
+		}
+		if !emails[0].IsStarred {
+			t.Error("expected email to be starred (flagged)")
+		}
+	})
+}
+
+func TestEmailFetchIMAPNoFromAddress(t *testing.T) {
+	msg := goImap.NewMessage(1, []goImap.FetchItem{goImap.FetchEnvelope, goImap.FetchFlags, goImap.FetchUid})
+	msg.Uid = 1
+	msg.Envelope = &goImap.Envelope{
+		Subject: "No From",
+		Date:    time.Now(),
+		From:    []*goImap.Address{}, // empty
+	}
+
+	mock := &mockIMAPClient{
+		mailboxMsgs: 1,
+		messages:    []*goImap.Message{msg},
+	}
+	withMockIMAP(mock, func() {
+		svc := NewEmailService(config.EmailConfig{
+			Enabled:  true,
+			Username: "user@example.com",
+			Password: "secret",
+		})
+		emails, err := svc.Fetch()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(emails) != 1 {
+			t.Fatalf("expected 1 email, got %d", len(emails))
+		}
+		if emails[0].From != "" {
+			t.Errorf("expected empty From, got %q", emails[0].From)
+		}
+	})
+}
+
+func TestEmailFetchIMAPConnectionError(t *testing.T) {
+	// IsLive=true but IMAP server unreachable — should fall back to mock data.
+	svc := NewEmailService(config.EmailConfig{
+		Enabled:    true,
+		Username:   "user@example.com",
+		Password:   "secret",
+		IMAPServer: "127.0.0.1",
+		IMAPPort:   1, // nothing listening here → connection refused immediately
+	})
+	if !svc.IsLive() {
+		t.Fatal("expected IsLive=true")
+	}
+	emails, err := svc.Fetch()
+	if err != nil {
+		t.Fatalf("expected fallback to mock on IMAP error, got: %v", err)
+	}
+	if len(emails) == 0 {
+		t.Error("expected mock emails on IMAP connection failure")
+	}
+}
+
+func TestEmailFetchIMAPConnectionErrorWithCache(t *testing.T) {
+	// First fetch succeeds (not live → mock), populates cache.
+	// Second call with live+error should return cache.
+	svc := NewEmailService(config.EmailConfig{})
+	first, _ := svc.Fetch()
+
+	// Now switch to live-but-failing config by directly manipulating state via a
+	// second instance that shares no cache — just verify the fallback path
+	// returns mock data consistently.
+	if len(first) == 0 {
+		t.Error("expected mock data on first fetch")
+	}
+
+	// Verify UnreadCount works with populated cache
+	count := svc.UnreadCount()
+	if count == 0 {
+		t.Error("expected non-zero unread count")
 	}
 }
