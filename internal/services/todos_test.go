@@ -490,6 +490,166 @@ func TestGenerateFromBriefingNotionDedup(t *testing.T) {
 	}
 }
 
+// ── Recurring todos ───────────────────────────────────────────────────────────
+
+func TestTodoCompleteRecurringDaily(t *testing.T) {
+	svc := NewTodoService()
+	due := time.Now()
+	rule := &models.RecurringRule{Frequency: models.RecurringDaily, Enabled: true}
+	svc.Add(models.TodoItem{
+		ID:        "rec-daily",
+		Title:     "Daily standup prep",
+		Status:    models.TodoPending,
+		DueDate:   &due,
+		Recurring: rule,
+		Tags:      []string{"daily"},
+	})
+
+	ok := svc.Complete("rec-daily")
+	if !ok {
+		t.Fatal("expected complete to return true")
+	}
+
+	items := svc.List()
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items (completed + spawned), got %d", len(items))
+	}
+
+	var completed, spawned models.TodoItem
+	for _, it := range items {
+		if it.ID == "rec-daily" {
+			completed = it
+		} else {
+			spawned = it
+		}
+	}
+
+	if completed.Status != models.TodoDone {
+		t.Error("original should be done")
+	}
+	if spawned.Status != models.TodoPending {
+		t.Error("spawned should be pending")
+	}
+	if spawned.Title != "Daily standup prep" {
+		t.Errorf("spawned should preserve title, got %q", spawned.Title)
+	}
+	if spawned.Recurring == nil || !spawned.Recurring.Enabled {
+		t.Error("spawned should have recurring rule enabled")
+	}
+	if spawned.DueDate == nil {
+		t.Error("spawned should have a due date")
+	}
+	// Daily: due date should be approximately 1 day later
+	diff := spawned.DueDate.Sub(due)
+	if diff < 20*time.Hour || diff > 28*time.Hour {
+		t.Errorf("daily due date diff should be ~24h, got %v", diff)
+	}
+}
+
+func TestTodoCompleteRecurringWeekly(t *testing.T) {
+	svc := NewTodoService()
+	due := time.Now()
+	rule := &models.RecurringRule{Frequency: models.RecurringWeekly, Enabled: true}
+	svc.Add(models.TodoItem{
+		ID:        "rec-weekly",
+		Title:     "Weekly report",
+		Status:    models.TodoPending,
+		DueDate:   &due,
+		Recurring: rule,
+	})
+
+	svc.Complete("rec-weekly")
+	items := svc.List()
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(items))
+	}
+
+	var spawned models.TodoItem
+	for _, it := range items {
+		if it.ID != "rec-weekly" {
+			spawned = it
+		}
+	}
+	if spawned.DueDate == nil {
+		t.Fatal("spawned should have due date")
+	}
+	diff := spawned.DueDate.Sub(due)
+	if diff < 6*24*time.Hour || diff > 8*24*time.Hour {
+		t.Errorf("weekly due date diff should be ~7 days, got %v", diff)
+	}
+}
+
+func TestTodoCompleteRecurringWeekdays(t *testing.T) {
+	svc := NewTodoService()
+	// Use a known Friday so we can predict next weekday = Monday
+	friday := time.Date(2025, 1, 10, 9, 0, 0, 0, time.UTC) // Friday
+	rule := &models.RecurringRule{Frequency: models.RecurringWeekdays, Enabled: true}
+	svc.Add(models.TodoItem{
+		ID:        "rec-weekday",
+		Title:     "Daily standup",
+		Status:    models.TodoPending,
+		DueDate:   &friday,
+		Recurring: rule,
+	})
+
+	svc.Complete("rec-weekday")
+	items := svc.List()
+	if len(items) != 2 {
+		t.Fatalf("expected 2, got %d", len(items))
+	}
+
+	var spawned models.TodoItem
+	for _, it := range items {
+		if it.ID != "rec-weekday" {
+			spawned = it
+		}
+	}
+	// Next weekday after Friday is Monday
+	next := nextDueDate(rule, friday)
+	if next.Weekday() == time.Saturday || next.Weekday() == time.Sunday {
+		t.Errorf("weekday recurrence should not land on weekend, got %s", next.Weekday())
+	}
+	_ = spawned
+}
+
+func TestTodoCompleteNonRecurring(t *testing.T) {
+	svc := NewTodoService()
+	svc.Add(models.TodoItem{ID: "plain-1", Title: "One-off task", Status: models.TodoPending})
+
+	svc.Complete("plain-1")
+	items := svc.List()
+	if len(items) != 1 {
+		t.Errorf("non-recurring todo should not spawn; got %d items", len(items))
+	}
+}
+
+func TestTodoCompleteRecurringDisabled(t *testing.T) {
+	svc := NewTodoService()
+	rule := &models.RecurringRule{Frequency: models.RecurringDaily, Enabled: false}
+	svc.Add(models.TodoItem{
+		ID:        "rec-disabled",
+		Title:     "Disabled recur",
+		Status:    models.TodoPending,
+		Recurring: rule,
+	})
+
+	svc.Complete("rec-disabled")
+	items := svc.List()
+	if len(items) != 1 {
+		t.Errorf("disabled recurring should not spawn; got %d items", len(items))
+	}
+}
+
+func TestNextDueDateUnknownFrequency(t *testing.T) {
+	rule := &models.RecurringRule{Frequency: "unknown", Enabled: true}
+	from := time.Date(2025, 1, 10, 9, 0, 0, 0, time.UTC)
+	next := nextDueDate(rule, from)
+	expected := from.AddDate(0, 0, 1)
+	if !next.Equal(expected) {
+		t.Errorf("unknown frequency should default to daily, got %v want %v", next, expected)
+	}
+}
+
 func TestGenerateFromBriefingNotionCriticalPriority(t *testing.T) {
 	svc := NewTodoService()
 	b := &models.Briefing{

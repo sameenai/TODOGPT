@@ -5,19 +5,25 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/todogpt/daily-briefing/internal/config"
 	"github.com/todogpt/daily-briefing/internal/models"
 	"github.com/todogpt/daily-briefing/internal/services"
 	"github.com/todogpt/daily-briefing/internal/websocket"
 )
 
+// configRedacted is the placeholder shown in GET /api/config for set credentials.
+const configRedacted = "***"
+
 type Server struct {
-	hub   *services.Hub
-	wsHub *websocket.Hub
-	mux   *http.ServeMux
-	port  int
-	host  string
+	hub     *services.Hub
+	wsHub   *websocket.Hub
+	mux     *http.ServeMux
+	port    int
+	host    string
+	cfgPath string // path used when saving config; "" = default ~/.daily-briefing/config.json
 }
 
 func NewServer(hub *services.Hub, host string, port int) *Server {
@@ -30,6 +36,11 @@ func NewServer(hub *services.Hub, host string, port int) *Server {
 	}
 	s.registerRoutes()
 	return s
+}
+
+// SetConfigPath sets the config file path used by PUT /api/config.
+func (s *Server) SetConfigPath(path string) {
+	s.cfgPath = path
 }
 
 func (s *Server) registerRoutes() {
@@ -46,6 +57,9 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("/api/todos", s.handleTodos)
 	s.mux.HandleFunc("/api/todos/", s.handleTodoAction)
 	s.mux.HandleFunc("/api/signals", s.handleSignals)
+	s.mux.HandleFunc("/api/config", s.handleConfig)
+	s.mux.HandleFunc("/api/review", s.handleReview)
+	s.mux.HandleFunc("/api/timeblocks", s.handleTimeBlocks)
 
 	// WebSocket
 	s.mux.HandleFunc("/ws", s.handleWebSocket)
@@ -169,8 +183,9 @@ func (s *Server) handleTodos(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		item.Source = "manual"
-		s.hub.Todos.Add(item)
+		item = s.hub.Todos.Add(item)
 		s.wsHub.Broadcast(mustJSON(models.DashboardUpdate{Type: "todos_updated", Payload: s.hub.Todos.List()}))
+		w.WriteHeader(http.StatusCreated)
 		s.writeJSON(w, item)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -178,21 +193,46 @@ func (s *Server) handleTodos(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTodoAction(w http.ResponseWriter, r *http.Request) {
-	// Extract ID from /api/todos/{id}
-	id := r.URL.Path[len("/api/todos/"):]
-	if id == "" {
+	// Extract ID from /api/todos/{id} or /api/todos/{id}/complete
+	rawPath := r.URL.Path[len("/api/todos/"):]
+	if rawPath == "" {
 		http.Error(w, "ID required", http.StatusBadRequest)
 		return
 	}
 
+	// Handle /api/todos/{id}/complete
+	if strings.HasSuffix(rawPath, "/complete") {
+		id := strings.TrimSuffix(rawPath, "/complete")
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if !s.hub.Todos.Complete(id) {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		s.wsHub.Broadcast(mustJSON(models.DashboardUpdate{Type: "todos_updated", Payload: s.hub.Todos.List()}))
+		// Return the updated todo
+		for _, t := range s.hub.Todos.List() {
+			if t.ID == id {
+				s.writeJSON(w, t)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	id := rawPath
 	switch r.Method {
 	case "PUT", "PATCH":
 		var updates struct {
-			Title       *string            `json:"title"`
-			Status      *models.TodoStatus `json:"status"`
-			Priority    *models.Priority   `json:"priority"`
-			Notes       *string            `json:"notes"`
-			Description *string            `json:"description"`
+			Title       *string               `json:"title"`
+			Status      *models.TodoStatus    `json:"status"`
+			Priority    *models.Priority      `json:"priority"`
+			Notes       *string               `json:"notes"`
+			Description *string               `json:"description"`
+			Recurring   *models.RecurringRule `json:"recurring"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -218,8 +258,18 @@ func (s *Server) handleTodoAction(w http.ResponseWriter, r *http.Request) {
 			if updates.Description != nil {
 				t.Description = *updates.Description
 			}
+			if updates.Recurring != nil {
+				t.Recurring = updates.Recurring
+			}
 		})
 		s.wsHub.Broadcast(mustJSON(models.DashboardUpdate{Type: "todos_updated", Payload: s.hub.Todos.List()}))
+		// Return the updated todo
+		for _, t := range s.hub.Todos.List() {
+			if t.ID == id {
+				s.writeJSON(w, t)
+				return
+			}
+		}
 		w.WriteHeader(http.StatusOK)
 	case "DELETE":
 		s.hub.Todos.Delete(id)
@@ -281,12 +331,145 @@ func (s *Server) handleSignals(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, signals)
 }
 
+// handleConfig serves GET/PUT for the server configuration.
+func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		s.writeJSON(w, s.maskConfig(s.hub.GetConfig()))
+	case "PUT":
+		existing := s.hub.GetConfig()
+		var incoming config.Config
+		if err := json.NewDecoder(r.Body).Decode(&incoming); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		merged := mergeConfig(existing, &incoming)
+		if err := merged.Save(s.cfgPath); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		// Update in-memory config (non-credential fields take effect immediately)
+		*existing = *merged
+		s.writeJSON(w, map[string]interface{}{
+			"ok":      true,
+			"message": "Config saved. Restart the server for credential changes to take effect.",
+		})
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleReview generates an end-of-day review using the AI service.
+func (s *Server) handleReview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	b := &models.Briefing{
+		Date:          time.Now(),
+		Todos:         s.hub.Todos.List(),
+		Events:        s.hub.Calendar.GetCached(),
+		UnreadEmails:  s.hub.Email.GetCached(),
+		GitHubNotifs:  s.hub.GitHub.GetCached(),
+		SlackMessages: s.hub.Slack.GetCached(),
+	}
+	review, err := s.hub.AI.DailyReview(b)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.writeJSON(w, map[string]string{"review": review})
+}
+
+// handleTimeBlocks generates focused-work time-block suggestions using the AI service.
+func (s *Server) handleTimeBlocks(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	b := &models.Briefing{
+		Date:   time.Now(),
+		Todos:  s.hub.Todos.List(),
+		Events: s.hub.Calendar.GetCached(),
+	}
+	blocks, err := s.hub.AI.SuggestTimeBlocks(b)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if blocks == nil {
+		blocks = []models.TimeBlock{}
+	}
+	s.writeJSON(w, map[string]interface{}{"blocks": blocks})
+}
+
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	websocket.ServeWs(s.wsHub, w, r)
 }
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "web/templates/index.html")
+}
+
+// maskConfig returns a map representation of cfg with credential fields replaced
+// by configRedacted when they are non-empty.
+func (s *Server) maskConfig(cfg *config.Config) map[string]interface{} {
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return map[string]interface{}{}
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return map[string]interface{}{}
+	}
+
+	redact := func(section string, fields ...string) {
+		sec, ok := m[section].(map[string]interface{})
+		if !ok {
+			return
+		}
+		for _, f := range fields {
+			if v, ok := sec[f].(string); ok && v != "" {
+				sec[f] = configRedacted
+			}
+		}
+	}
+
+	redact("weather", "api_key")
+	redact("news", "api_key")
+	redact("slack", "bot_token", "app_token")
+	redact("email", "password")
+	redact("github", "token")
+	redact("jira", "api_token")
+	redact("notion", "token")
+	redact("ai", "api_key")
+
+	return m
+}
+
+// mergeConfig produces a new Config from incoming, preserving existing credential
+// values wherever the incoming value is empty or configRedacted.
+func mergeConfig(existing, incoming *config.Config) *config.Config {
+	merged := *incoming
+
+	keep := func(in, ex string) string {
+		if in == configRedacted || in == "" {
+			return ex
+		}
+		return in
+	}
+
+	merged.Weather.APIKey = keep(incoming.Weather.APIKey, existing.Weather.APIKey)
+	merged.News.APIKey = keep(incoming.News.APIKey, existing.News.APIKey)
+	merged.Slack.BotToken = keep(incoming.Slack.BotToken, existing.Slack.BotToken)
+	merged.Slack.AppToken = keep(incoming.Slack.AppToken, existing.Slack.AppToken)
+	merged.Email.Password = keep(incoming.Email.Password, existing.Email.Password)
+	merged.GitHub.Token = keep(incoming.GitHub.Token, existing.GitHub.Token)
+	merged.Jira.Token = keep(incoming.Jira.Token, existing.Jira.Token)
+	merged.Notion.Token = keep(incoming.Notion.Token, existing.Notion.Token)
+	merged.AI.APIKey = keep(incoming.AI.APIKey, existing.AI.APIKey)
+
+	return &merged
 }
 
 func mustJSON(v interface{}) []byte {

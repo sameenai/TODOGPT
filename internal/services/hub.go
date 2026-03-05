@@ -264,3 +264,8 @@ func (h *Hub) StartPolling() {
 func (h *Hub) Stop() {
 	close(h.stopCh)
 }
+
+// GetConfig returns the hub's current configuration.
+func (h *Hub) GetConfig() *config.Config {
+	return h.cfg
+}

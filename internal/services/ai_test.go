@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -250,6 +251,220 @@ func TestAIServiceNetworkError(t *testing.T) {
 	_, err := svc.Summarize(testBriefing())
 	if err == nil {
 		t.Error("expected network error")
+	}
+}
+
+// ── DailyReview ──────────────────────────────────────────────────────────────
+
+func TestDailyReviewDisabledReturnsEmpty(t *testing.T) {
+	svc := NewAIService(config.AIConfig{Enabled: false})
+	review, err := svc.DailyReview(testBriefing())
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if review != "" {
+		t.Errorf("expected empty review when disabled, got %q", review)
+	}
+}
+
+func TestDailyReviewCallsAPI(t *testing.T) {
+	wantText := "Great day! You completed 3 tasks."
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]interface{}{
+			"content": []map[string]string{{"type": "text", "text": wantText}},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer ts.Close()
+
+	orig := claudeAPIURL
+	claudeAPIURL = ts.URL
+	defer func() { claudeAPIURL = orig }()
+
+	svc := NewAIService(config.AIConfig{Enabled: true, APIKey: "key"})
+	review, err := svc.DailyReview(testBriefing())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if review != wantText {
+		t.Errorf("expected %q, got %q", wantText, review)
+	}
+}
+
+func TestBuildReviewPromptContent(t *testing.T) {
+	b := testBriefing()
+	b.Todos = append(b.Todos, models.TodoItem{
+		ID:     "done-1",
+		Title:  "Write tests",
+		Status: models.TodoDone,
+	})
+	prompt := buildReviewPrompt(b)
+	if !strings.Contains(prompt, "Write tests") {
+		t.Error("expected completed todo in review prompt")
+	}
+	if !strings.Contains(prompt, "Fix bug") {
+		t.Error("expected pending todo in review prompt")
+	}
+	if !strings.Contains(prompt, "Standup") {
+		t.Error("expected calendar event in review prompt")
+	}
+}
+
+// ── SuggestTimeBlocks ─────────────────────────────────────────────────────────
+
+func TestSuggestTimeBlocksDisabledReturnsNil(t *testing.T) {
+	svc := NewAIService(config.AIConfig{Enabled: false})
+	blocks, err := svc.SuggestTimeBlocks(testBriefing())
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if blocks != nil {
+		t.Errorf("expected nil blocks when disabled, got %v", blocks)
+	}
+}
+
+func TestSuggestTimeBlocksCallsAPI(t *testing.T) {
+	wantJSON := `[{"start":"09:00","end":"10:30","title":"Deep work","color":"blue"}]`
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]interface{}{
+			"content": []map[string]string{{"type": "text", "text": wantJSON}},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer ts.Close()
+
+	orig := claudeAPIURL
+	claudeAPIURL = ts.URL
+	defer func() { claudeAPIURL = orig }()
+
+	svc := NewAIService(config.AIConfig{Enabled: true, APIKey: "key"})
+	blocks, err := svc.SuggestTimeBlocks(testBriefing())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(blocks) != 1 {
+		t.Fatalf("expected 1 block, got %d", len(blocks))
+	}
+	if blocks[0].Start != "09:00" {
+		t.Errorf("expected start 09:00, got %q", blocks[0].Start)
+	}
+	if blocks[0].Title != "Deep work" {
+		t.Errorf("expected title 'Deep work', got %q", blocks[0].Title)
+	}
+}
+
+func TestParseTimeBlocksPlainJSON(t *testing.T) {
+	input := `[{"start":"10:00","end":"11:30","title":"Focus","color":"orange"}]`
+	blocks, err := parseTimeBlocks(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(blocks) != 1 || blocks[0].Start != "10:00" {
+		t.Errorf("unexpected blocks: %v", blocks)
+	}
+}
+
+func TestParseTimeBlocksMarkdownFence(t *testing.T) {
+	input := "Here are suggestions:\n```json\n[{\"start\":\"09:00\",\"end\":\"10:00\",\"title\":\"Work\",\"color\":\"blue\"}]\n```"
+	blocks, err := parseTimeBlocks(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(blocks) != 1 {
+		t.Fatalf("expected 1 block, got %d", len(blocks))
+	}
+}
+
+func TestParseTimeBlocksNoArray(t *testing.T) {
+	_, err := parseTimeBlocks("no array here")
+	if err == nil {
+		t.Error("expected error when no JSON array found")
+	}
+}
+
+func TestParseTimeBlocksInvalidJSON(t *testing.T) {
+	_, err := parseTimeBlocks("[invalid json}")
+	if err == nil {
+		t.Error("expected error on invalid JSON")
+	}
+}
+
+func TestBuildTimeBlockPromptContent(t *testing.T) {
+	b := testBriefing()
+	prompt := buildTimeBlockPrompt(b)
+	if !strings.Contains(prompt, "Standup") {
+		t.Error("expected calendar event in time block prompt")
+	}
+	if !strings.Contains(prompt, "Fix bug") {
+		t.Error("expected pending todo in time block prompt")
+	}
+	if !strings.Contains(prompt, "JSON array") {
+		t.Error("expected JSON instruction in prompt")
+	}
+}
+
+func TestBuildTimeBlockPromptNoEvents(t *testing.T) {
+	b := testBriefing()
+	b.Events = nil
+	prompt := buildTimeBlockPrompt(b)
+	if !strings.Contains(prompt, "none") {
+		t.Error("expected 'none' when no events")
+	}
+}
+
+func TestBuildReviewPromptManyTodos(t *testing.T) {
+	b := testBriefing()
+	now := time.Now()
+	// Add 6+ completed and 6+ pending to test the truncation at 5
+	for i := 0; i < 7; i++ {
+		b.Todos = append(b.Todos, models.TodoItem{
+			ID: fmt.Sprintf("done-%d", i), Title: fmt.Sprintf("Completed task %d", i),
+			Status: models.TodoDone, CompletedAt: &now,
+		})
+		b.Todos = append(b.Todos, models.TodoItem{
+			ID: fmt.Sprintf("pend-%d", i), Title: fmt.Sprintf("Pending task %d", i),
+			Status: models.TodoPending,
+		})
+	}
+	b.Events = []models.CalendarEvent{
+		{ID: "e1", Title: "Event A", StartTime: now},
+		{ID: "e2", Title: "Event B", StartTime: now},
+		{ID: "e3", Title: "Event C", StartTime: now},
+		{ID: "e4", Title: "Event D", StartTime: now}, // >3, should be truncated
+	}
+	prompt := buildReviewPrompt(b)
+	// Should not panic and should contain expected sections
+	if !strings.Contains(prompt, "COMPLETED TODAY") {
+		t.Error("expected COMPLETED TODAY section")
+	}
+	if !strings.Contains(prompt, "STILL PENDING") {
+		t.Error("expected STILL PENDING section")
+	}
+}
+
+func TestHubGetConfig(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Server.DataDir = t.TempDir()
+	hub := NewHub(cfg)
+	got := hub.GetConfig()
+	if got == nil {
+		t.Fatal("expected non-nil config")
+	}
+	if got.Server.Port != cfg.Server.Port {
+		t.Errorf("expected port %d, got %d", cfg.Server.Port, got.Server.Port)
+	}
+}
+
+func TestBuildTimeBlockPromptAllDayEvent(t *testing.T) {
+	b := testBriefing()
+	b.Events = []models.CalendarEvent{
+		{ID: "all-day", Title: "Company Holiday", AllDay: true},
+	}
+	prompt := buildTimeBlockPrompt(b)
+	if !strings.Contains(prompt, "All day") {
+		t.Error("expected all-day indicator in prompt")
 	}
 }
 

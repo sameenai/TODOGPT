@@ -1,9 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import type { TodoItem } from '@/lib/types';
-import { createTodo, updateTodo, deleteTodo } from '@/lib/api';
+import type { TodoItem, RecurringRule } from '@/lib/types';
+import { createTodo, updateTodo, deleteTodo, setRecurring } from '@/lib/api';
 import { PRIORITY_LABEL, PRIORITY_COLOR } from '@/lib/utils';
+
+const RECUR_LABELS: Record<string, string> = {
+  daily: 'Daily',
+  weekdays: 'Weekdays',
+  weekly: 'Weekly',
+};
 
 type Filter = 'all' | 'pending' | 'active' | 'done' | 'urgent';
 
@@ -16,6 +22,7 @@ export function TodoList({ todos, onTodosChange }: Props) {
   const [input, setInput] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [adding, setAdding] = useState(false);
+  const [recurringOpen, setRecurringOpen] = useState<string | null>(null);
 
   const filtered = todos.filter(t => {
     if (filter === 'all')     return t.status === 0 || t.status === 1;
@@ -65,6 +72,17 @@ export function TodoList({ todos, onTodosChange }: Props) {
     onTodosChange(todos.filter(t => t.id !== id));
     try {
       await deleteTodo(id);
+    } catch {
+      onTodosChange(todos);
+    }
+  }
+
+  async function handleSetRecurring(todo: TodoItem, freq: RecurringRule['frequency'] | null) {
+    setRecurringOpen(null);
+    const rule: RecurringRule | null = freq ? { frequency: freq, enabled: true } : null;
+    onTodosChange(todos.map(t => t.id === todo.id ? { ...t, recurring: rule ?? undefined } : t));
+    try {
+      await setRecurring(todo.id, rule);
     } catch {
       onTodosChange(todos);
     }
@@ -159,25 +177,63 @@ export function TodoList({ todos, onTodosChange }: Props) {
                   {todo.status === 1 && (
                     <span className="text-xs text-yellow-400 font-medium">active</span>
                   )}
+                  {todo.recurring?.enabled && (
+                    <span className="text-xs text-cyan-500 font-medium" title={`Recurs ${todo.recurring.frequency}`}>
+                      ↻ {RECUR_LABELS[todo.recurring.frequency] ?? todo.recurring.frequency}
+                    </span>
+                  )}
                 </div>
               </div>
 
               {/* Hover actions */}
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="relative flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => handleToggleActive(todo)}
                   className="p-1 text-xs text-gray-400 hover:text-yellow-400 transition-colors"
                   title="Toggle active"
+                  aria-label="Toggle active"
                 >
                   &#9679;
+                </button>
+                <button
+                  onClick={() => setRecurringOpen(recurringOpen === todo.id ? null : todo.id)}
+                  className={`p-1 text-xs transition-colors ${todo.recurring?.enabled ? 'text-cyan-400 hover:text-cyan-300' : 'text-gray-400 hover:text-cyan-400'}`}
+                  title="Set recurrence"
+                  aria-label="Set recurrence"
+                >
+                  ↻
                 </button>
                 <button
                   onClick={() => handleDelete(todo.id)}
                   className="p-1 text-xs text-gray-400 hover:text-red-400 transition-colors"
                   title="Delete"
+                  aria-label="Delete todo"
                 >
                   &#10005;
                 </button>
+
+                {/* Recurrence dropdown */}
+                {recurringOpen === todo.id && (
+                  <div className="absolute right-0 top-6 z-10 w-32 bg-gray-800 border border-gray-700 rounded shadow-xl">
+                    {(['daily', 'weekdays', 'weekly'] as const).map(freq => (
+                      <button
+                        key={freq}
+                        onClick={() => handleSetRecurring(todo, freq)}
+                        className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-700 transition-colors ${
+                          todo.recurring?.frequency === freq && todo.recurring.enabled ? 'text-cyan-400' : 'text-gray-300'
+                        }`}
+                      >
+                        {RECUR_LABELS[freq]}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => handleSetRecurring(todo, null)}
+                      className="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-700 hover:text-gray-300 transition-colors border-t border-gray-700"
+                    >
+                      None
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ))

@@ -99,22 +99,48 @@ type NotionPage struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 }
 
+// RecurringFrequency defines how often a todo recurs.
+type RecurringFrequency string
+
+const (
+	RecurringDaily    RecurringFrequency = "daily"
+	RecurringWeekdays RecurringFrequency = "weekdays"
+	RecurringWeekly   RecurringFrequency = "weekly"
+)
+
+// RecurringRule defines the recurrence schedule for a todo.
+type RecurringRule struct {
+	Frequency RecurringFrequency `json:"frequency"`
+	Enabled   bool               `json:"enabled"`
+}
+
 // TodoItem represents a task in the interactive todo list.
 type TodoItem struct {
-	ID          string     `json:"id"`
-	Title       string     `json:"title"`
-	Description string     `json:"description"`
-	Priority    Priority   `json:"priority"`
-	Status      TodoStatus `json:"status"`
-	Source      string     `json:"source"`
-	SourceID    string     `json:"source_id"`
-	SourceURL   string     `json:"source_url"`
-	DueDate     *time.Time `json:"due_date,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
-	Tags        []string   `json:"tags"`
-	Notes       string     `json:"notes"`
+	ID          string         `json:"id"`
+	Title       string         `json:"title"`
+	Description string         `json:"description"`
+	Priority    Priority       `json:"priority"`
+	Status      TodoStatus     `json:"status"`
+	Source      string         `json:"source"`
+	SourceID    string         `json:"source_id"`
+	SourceURL   string         `json:"source_url"`
+	DueDate     *time.Time     `json:"due_date,omitempty"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	CompletedAt *time.Time     `json:"completed_at,omitempty"`
+	Tags        []string       `json:"tags"`
+	Notes       string         `json:"notes"`
+	Recurring   *RecurringRule `json:"recurring,omitempty"`
+}
+
+// TimeBlock represents a suggested focused-work time slot.
+type TimeBlock struct {
+	Start  string `json:"start"` // "HH:MM" 24-hour
+	End    string `json:"end"`   // "HH:MM" 24-hour
+	Title  string `json:"title"`
+	TodoID string `json:"todo_id,omitempty"`
+	Notes  string `json:"notes,omitempty"`
+	Color  string `json:"color,omitempty"` // "red", "orange", "blue", "gray"
 }
 
 type Priority int

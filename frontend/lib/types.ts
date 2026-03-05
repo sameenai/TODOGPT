@@ -91,6 +91,11 @@ export interface NotionPage {
   updated_at: string;
 }
 
+export interface RecurringRule {
+  frequency: 'daily' | 'weekdays' | 'weekly';
+  enabled: boolean;
+}
+
 export interface TodoItem {
   id: string;
   title: string;
@@ -106,6 +111,16 @@ export interface TodoItem {
   completed_at?: string;
   tags: string[];
   notes: string;
+  recurring?: RecurringRule;
+}
+
+export interface TimeBlock {
+  start: string;
+  end: string;
+  title: string;
+  todo_id?: string;
+  notes?: string;
+  color?: 'red' | 'orange' | 'blue' | 'gray';
 }
 
 export interface Briefing {
@@ -130,4 +145,19 @@ export interface Briefing {
 export interface DashboardUpdate {
   type: 'full_refresh' | 'todos_updated';
   payload: unknown;
+}
+
+// Mirrors Go's config.Config, with sensitive fields shown as "***" when set.
+export interface ConfigResponse {
+  server: { port: number; host: string; poll_interval_seconds: number };
+  weather: { api_key: string; city: string; country: string; units: string; lat: number; lon: number; enabled: boolean };
+  news: { api_key: string; sources: string[]; country: string; categories: string[]; max_items: number; enabled: boolean };
+  google: { ical_url: string; calendar_enabled: boolean; gmail_enabled: boolean; credentials_file: string; token_file: string };
+  slack: { bot_token: string; app_token: string; channels: string[]; enabled: boolean };
+  email: { imap_server: string; imap_port: number; username: string; password: string; enabled: boolean };
+  github: { token: string; repos: string[]; enabled: boolean };
+  jira: { base_url: string; email: string; api_token: string; project_key: string; enabled: boolean };
+  notion: { token: string; database_id: string; enabled: boolean };
+  ai: { api_key: string; model: string; enabled: boolean };
+  pomodoro: { work_minutes: number; break_minutes: number; enabled: boolean };
 }
