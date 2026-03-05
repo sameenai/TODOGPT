@@ -12,6 +12,12 @@ import (
 	"github.com/todogpt/daily-briefing/internal/models"
 )
 
+// openMeteoBaseURL and geocodingBaseURL are package-level so tests can override them.
+var (
+	openMeteoBaseURL = "https://api.open-meteo.com"
+	geocodingBaseURL = "https://geocoding-api.open-meteo.com"
+)
+
 type WeatherService struct {
 	cfg   config.WeatherConfig
 	cache *models.Weather
@@ -69,11 +75,11 @@ func (s *WeatherService) Fetch() (*models.Weather, error) {
 	}
 
 	url := fmt.Sprintf(
-		"https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current_weather=true&hourly=relative_humidity_2m&temperature_unit=%s&wind_speed_unit=%s&timezone=auto",
-		lat, lon, units, windUnit,
+		"%s/v1/forecast?latitude=%.4f&longitude=%.4f&current_weather=true&hourly=relative_humidity_2m&temperature_unit=%s&wind_speed_unit=%s&timezone=auto",
+		openMeteoBaseURL, lat, lon, units, windUnit,
 	)
 
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) // #nosec G107 -- URL is constructed from app config and package-level vars (overridable in tests)
 	if err != nil {
 		return s.mockWeather(), nil
 	}
@@ -144,8 +150,8 @@ func (s *WeatherService) mockWeather() *models.Weather {
 }
 
 func geocodeCity(city string) (lat, lon float64, name string, err error) {
-	url := fmt.Sprintf("https://geocoding-api.open-meteo.com/v1/search?name=%s&count=1&language=en&format=json", city)
-	resp, err := http.Get(url)
+	url := fmt.Sprintf("%s/v1/search?name=%s&count=1&language=en&format=json", geocodingBaseURL, city)
+	resp, err := http.Get(url) // #nosec G107 -- URL is constructed from package-level base URL (overridable in tests)
 	if err != nil {
 		return 0, 0, city, fmt.Errorf("geocode error: %w", err)
 	}
