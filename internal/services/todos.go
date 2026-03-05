@@ -200,6 +200,80 @@ func (s *TodoService) GenerateFromBriefing(b *models.Briefing) {
 		})
 	}
 
+	// Extract from Jira tickets assigned to user
+	for _, ticket := range b.JiraTickets {
+		sourceID := "jira:" + ticket.Key
+		if s.seen[sourceID] {
+			continue
+		}
+		s.seen[sourceID] = true
+
+		priority := models.PriorityMedium
+		switch ticket.Priority {
+		case "Critical", "Blocker":
+			priority = models.PriorityUrgent
+		case "High", "Major":
+			priority = models.PriorityHigh
+		case "Low", "Minor", "Trivial":
+			priority = models.PriorityLow
+		}
+
+		var dueDate *time.Time
+		if !ticket.DueDate.IsZero() {
+			d := ticket.DueDate
+			dueDate = &d
+		}
+
+		s.items = append(s.items, models.TodoItem{
+			ID:          fmt.Sprintf("todo-jira-%s", ticket.Key),
+			Title:       fmt.Sprintf("[%s] %s", ticket.Key, ticket.Summary),
+			Description: fmt.Sprintf("Status: %s · Type: %s", ticket.Status, ticket.Type),
+			Priority:    priority,
+			Status:      models.TodoPending,
+			Source:      "jira",
+			SourceID:    ticket.Key,
+			SourceURL:   ticket.URL,
+			DueDate:     dueDate,
+			Tags:        []string{ticket.Type, ticket.Status},
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		})
+	}
+
+	// Extract from Notion pages
+	for _, page := range b.NotionPages {
+		sourceID := "notion:" + page.ID
+		if s.seen[sourceID] {
+			continue
+		}
+		s.seen[sourceID] = true
+
+		priority := models.PriorityMedium
+		switch page.Priority {
+		case "Critical", "Urgent":
+			priority = models.PriorityUrgent
+		case "High":
+			priority = models.PriorityHigh
+		case "Low":
+			priority = models.PriorityLow
+		}
+
+		s.items = append(s.items, models.TodoItem{
+			ID:          fmt.Sprintf("todo-notion-%s", page.ID),
+			Title:       page.Title,
+			Description: fmt.Sprintf("Status: %s", page.Status),
+			Priority:    priority,
+			Status:      models.TodoPending,
+			Source:      "notion",
+			SourceID:    page.ID,
+			SourceURL:   page.URL,
+			DueDate:     page.DueDate,
+			Tags:        []string{"notion"},
+			CreatedAt:   page.UpdatedAt,
+			UpdatedAt:   time.Now(),
+		})
+	}
+
 	// Extract from calendar (upcoming meetings needing prep)
 	for _, evt := range b.Events {
 		sourceID := "calendar:" + evt.ID
