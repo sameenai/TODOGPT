@@ -183,6 +183,9 @@ type Briefing struct {
 	GeneratedAt   time.Time            `json:"generated_at"`
 	// IntegrationStatuses maps integration name → true (live data) / false (demo data).
 	IntegrationStatuses map[string]bool `json:"integration_statuses"`
+	// IntegrationAvailable maps integration name → true when real API code exists and
+	// it can be made live by adding credentials to config. False means not yet implemented.
+	IntegrationAvailable map[string]bool `json:"integration_available"`
 }
 
 // DashboardUpdate is sent over WebSocket for real-time updates.

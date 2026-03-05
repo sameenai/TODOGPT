@@ -124,6 +124,7 @@ export interface Briefing {
   summary?: string;
   generated_at: string;
   integration_statuses: Record<string, boolean>;
+  integration_available: Record<string, boolean>;
 }
 
 export interface DashboardUpdate {

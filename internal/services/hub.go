@@ -214,6 +214,19 @@ func (h *Hub) FetchAll() *models.Briefing {
 		"notion":   h.Notion.IsLive(),
 	}
 
+	// Record which integrations have real API code that can be enabled via config.
+	// false = not yet implemented (always returns mock regardless of config).
+	briefing.IntegrationAvailable = map[string]bool{
+		"weather":  true,
+		"news":     true,
+		"calendar": false, // Google Calendar API not yet implemented
+		"email":    false, // Gmail/IMAP not yet implemented
+		"slack":    false, // Slack API not yet implemented
+		"github":   true,
+		"jira":     true,
+		"notion":   true,
+	}
+
 	// Auto-generate todos from signals
 	h.Todos.GenerateFromBriefing(briefing)
 	briefing.Todos = h.Todos.List()
