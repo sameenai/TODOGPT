@@ -215,9 +215,9 @@
                 <div class="pomodoro">
                     <div class="pomodoro-timer" id="pomodoro-display">25:00</div>
                     <div class="pomodoro-controls">
-                        <button class="pomodoro-btn" id="pomo-start" onclick="togglePomodoro()">Start</button>
-                        <button class="pomodoro-btn" onclick="resetPomodoro()">Reset</button>
-                        <button class="pomodoro-btn" onclick="skipPomodoro()">Skip</button>
+                        <button class="pomodoro-btn" id="pomo-start">Start</button>
+                        <button class="pomodoro-btn" id="pomo-reset">Reset</button>
+                        <button class="pomodoro-btn" id="pomo-skip">Skip</button>
                     </div>
                 </div>
             </div>
@@ -230,15 +230,15 @@
                 </div>
                 <div class="todo-input-area">
                     <div class="todo-input-row">
-                        <input type="text" class="todo-input" id="todo-input" placeholder="Add a task..." onkeypress="if(event.key==='Enter')addTodo()">
-                        <button class="todo-add-btn" onclick="addTodo()">Add</button>
+                        <input type="text" class="todo-input" id="todo-input" placeholder="Add a task...">
+                        <button class="todo-add-btn">Add</button>
                     </div>
                 </div>
                 <div class="todo-filters">
-                    <button class="todo-filter active" data-filter="all" onclick="filterTodos('all', this)">All</button>
-                    <button class="todo-filter" data-filter="pending" onclick="filterTodos('pending', this)">Pending</button>
-                    <button class="todo-filter" data-filter="done" onclick="filterTodos('done', this)">Done</button>
-                    <button class="todo-filter" data-filter="urgent" onclick="filterTodos('urgent', this)">Urgent</button>
+                    <button class="todo-filter active" data-filter="all">All</button>
+                    <button class="todo-filter" data-filter="pending">Pending</button>
+                    <button class="todo-filter" data-filter="done">Done</button>
+                    <button class="todo-filter" data-filter="urgent">Urgent</button>
                 </div>
                 <div class="card-body" id="todo-list" style="max-height:500px;">
                     <div class="empty-state">Loading tasks...</div>
@@ -247,6 +247,6 @@
         </div>
     </div>
 
-    <script src="/static/js/dashboard.js"></script>
+    <script type="module" src="/static/js/main.js"></script>
 </body>
 </html>
