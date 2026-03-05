@@ -16,7 +16,7 @@ func main() {
 		os.Exit(1)
 	}
 	hub := services.NewHub(cfg)
-	if err := tui.Run(hub); err != nil {
+	if err := tui.Run(hub, cfg.Pomodoro); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

@@ -157,7 +157,7 @@ func TestTruncate(t *testing.T) {
 
 func TestNewModel(t *testing.T) {
 	hub := testHub(t)
-	m := newModel(hub)
+	m := newModel(hub, config.PomodoroConfig{WorkMinutes: 25, BreakMinutes: 5, Enabled: true})
 	if !m.loading {
 		t.Error("expected loading=true on new model")
 	}
@@ -168,7 +168,7 @@ func TestNewModel(t *testing.T) {
 
 func TestInitReturnsCmds(t *testing.T) {
 	hub := testHub(t)
-	m := newModel(hub)
+	m := newModel(hub, config.PomodoroConfig{WorkMinutes: 25, BreakMinutes: 5, Enabled: true})
 	cmd := m.Init()
 	if cmd == nil {
 		t.Error("expected non-nil Init cmd")
@@ -986,6 +986,183 @@ func TestScheduleTick(t *testing.T) {
 	}
 }
 
+// ── Pomodoro timer ────────────────────────────────────────────────────────────
+
+func TestPomodoroNewModelInitialState(t *testing.T) {
+	cfg := config.PomodoroConfig{WorkMinutes: 25, BreakMinutes: 5, Enabled: true}
+	m := newModel(nil, cfg)
+	if m.pomodoroRunning {
+		t.Error("expected pomodoro not running initially")
+	}
+	if !m.pomodoroWork {
+		t.Error("expected pomodoro to start in work phase")
+	}
+	if m.pomodoroLeft != 25*time.Minute {
+		t.Errorf("expected 25m left, got %v", m.pomodoroLeft)
+	}
+}
+
+func TestPomodoroNewModelDefaultDuration(t *testing.T) {
+	// WorkMinutes=0 should default to 25 minutes
+	cfg := config.PomodoroConfig{Enabled: true}
+	m := newModel(nil, cfg)
+	if m.pomodoroLeft != 25*time.Minute {
+		t.Errorf("expected default 25m, got %v", m.pomodoroLeft)
+	}
+}
+
+func TestPomodoroKeyPStartsTimer(t *testing.T) {
+	m := baseModel()
+	m.pomodoroCfg = config.PomodoroConfig{WorkMinutes: 25, BreakMinutes: 5, Enabled: true}
+	m.pomodoroWork = true
+	m.pomodoroLeft = 25 * time.Minute
+
+	result, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
+	next := result.(model)
+	if !next.pomodoroRunning {
+		t.Error("expected pomodoro running after p key")
+	}
+	if cmd == nil {
+		t.Error("expected non-nil cmd to start tick when pomodoro starts")
+	}
+}
+
+func TestPomodoroKeyPTogglesOff(t *testing.T) {
+	m := baseModel()
+	m.pomodoroCfg = config.PomodoroConfig{WorkMinutes: 25, BreakMinutes: 5, Enabled: true}
+	m.pomodoroRunning = true
+	m.pomodoroWork = true
+	m.pomodoroLeft = 20 * time.Minute
+
+	result, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
+	next := result.(model)
+	if next.pomodoroRunning {
+		t.Error("expected pomodoro stopped after second p key")
+	}
+}
+
+func TestPomodoroKeyPDisabledNoOp(t *testing.T) {
+	m := baseModel()
+	m.pomodoroCfg = config.PomodoroConfig{WorkMinutes: 25, BreakMinutes: 5, Enabled: false}
+
+	result, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
+	next := result.(model)
+	if next.pomodoroRunning {
+		t.Error("expected p key to be no-op when pomodoro disabled")
+	}
+}
+
+func TestPomodoroTickDecrements(t *testing.T) {
+	m := baseModel()
+	m.pomodoroCfg = config.PomodoroConfig{WorkMinutes: 25, BreakMinutes: 5, Enabled: true}
+	m.pomodoroRunning = true
+	m.pomodoroWork = true
+	m.pomodoroLeft = 10 * time.Second
+
+	result, cmd := m.Update(pomodoroTickMsg(time.Now()))
+	next := result.(model)
+	if next.pomodoroLeft != 9*time.Second {
+		t.Errorf("expected 9s left, got %v", next.pomodoroLeft)
+	}
+	if cmd == nil {
+		t.Error("expected next tick cmd when running")
+	}
+}
+
+func TestPomodoroTickNotRunningNoOp(t *testing.T) {
+	m := baseModel()
+	m.pomodoroCfg = config.PomodoroConfig{WorkMinutes: 25, BreakMinutes: 5, Enabled: true}
+	m.pomodoroRunning = false
+	m.pomodoroLeft = 10 * time.Second
+
+	result, cmd := m.Update(pomodoroTickMsg(time.Now()))
+	next := result.(model)
+	if next.pomodoroLeft != 10*time.Second {
+		t.Errorf("expected time unchanged when not running, got %v", next.pomodoroLeft)
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd when not running")
+	}
+}
+
+func TestPomodoroTickPhaseSwitchToBreak(t *testing.T) {
+	m := baseModel()
+	m.pomodoroCfg = config.PomodoroConfig{WorkMinutes: 25, BreakMinutes: 5, Enabled: true}
+	m.pomodoroRunning = true
+	m.pomodoroWork = true
+	m.pomodoroLeft = time.Second // one tick will exhaust it
+
+	result, _ := m.Update(pomodoroTickMsg(time.Now()))
+	next := result.(model)
+	if next.pomodoroWork {
+		t.Error("expected switch to break phase after work exhausted")
+	}
+	if next.pomodoroLeft != 5*time.Minute {
+		t.Errorf("expected 5m break, got %v", next.pomodoroLeft)
+	}
+}
+
+func TestPomodoroTickPhaseSwitchToWork(t *testing.T) {
+	m := baseModel()
+	m.pomodoroCfg = config.PomodoroConfig{WorkMinutes: 25, BreakMinutes: 5, Enabled: true}
+	m.pomodoroRunning = true
+	m.pomodoroWork = false
+	m.pomodoroLeft = time.Second
+
+	result, _ := m.Update(pomodoroTickMsg(time.Now()))
+	next := result.(model)
+	if !next.pomodoroWork {
+		t.Error("expected switch to work phase after break exhausted")
+	}
+	if next.pomodoroLeft != 25*time.Minute {
+		t.Errorf("expected 25m work, got %v", next.pomodoroLeft)
+	}
+}
+
+func TestPomodoroStatusBarShowsWhenEnabled(t *testing.T) {
+	m := baseModel()
+	m.pomodoroCfg = config.PomodoroConfig{WorkMinutes: 25, BreakMinutes: 5, Enabled: true}
+	m.pomodoroWork = true
+	m.pomodoroLeft = 25 * time.Minute
+
+	bar := m.viewStatusBar()
+	if !strings.Contains(bar, "25:00") {
+		t.Errorf("expected timer in status bar, got: %s", bar)
+	}
+	if !strings.Contains(bar, "work") {
+		t.Errorf("expected 'work' phase label, got: %s", bar)
+	}
+}
+
+func TestPomodoroStatusBarBreakPhase(t *testing.T) {
+	m := baseModel()
+	m.pomodoroCfg = config.PomodoroConfig{WorkMinutes: 25, BreakMinutes: 5, Enabled: true}
+	m.pomodoroWork = false
+	m.pomodoroLeft = 5 * time.Minute
+
+	bar := m.viewStatusBar()
+	if !strings.Contains(bar, "break") {
+		t.Errorf("expected 'break' phase label, got: %s", bar)
+	}
+}
+
+func TestPomodoroStatusBarHiddenWhenDisabled(t *testing.T) {
+	m := baseModel()
+	m.pomodoroCfg = config.PomodoroConfig{Enabled: false}
+
+	bar := m.viewStatusBar()
+	if strings.Contains(bar, "🍅") || strings.Contains(bar, "☕") {
+		t.Errorf("expected no pomodoro in status bar when disabled, got: %s", bar)
+	}
+}
+
+func TestSchedulePomodoroTick(t *testing.T) {
+	cmd := schedulePomodoroTick()
+	if cmd == nil {
+		t.Error("schedulePomodoroTick should return a non-nil Cmd")
+	}
+}
+
 // ── Key: new todo (n) ─────────────────────────────────────────────────────────
 
 func TestKeyNEntersInputMode(t *testing.T) {
@@ -1297,6 +1474,5 @@ func TestViewStatusBarTodosActions(t *testing.T) {
 		t.Errorf("expected 'new' in todos status bar, got: %q", sb)
 	}
 	if !strings.Contains(sb, "delete") {
-		t.Errorf("expected 'delete' in todos status bar, got: %q", sb)
-	}
+		t.Errorf("expected 'delete' in todos status bar, got: %q", sb)	}
 }
