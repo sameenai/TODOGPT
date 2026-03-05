@@ -20,6 +20,9 @@ import { NotionSection } from './sections/NotionSection';
 import { PomodoroTimer } from './PomodoroTimer';
 import { TodoList } from './TodoList';
 import { InboxZeroProgress } from './InboxZeroProgress';
+import { SettingsPanel } from './SettingsPanel';
+import { DailyReview } from './DailyReview';
+import { TimeBlocking } from './TimeBlocking';
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8080/ws';
 
@@ -31,6 +34,8 @@ export function Dashboard({ initialBriefing }: Props) {
   const [briefing, setBriefing] = useState<Briefing | null>(initialBriefing);
   const [wsConnected, setWsConnected] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   useWebSocket(
     WS_URL,
@@ -63,6 +68,24 @@ export function Dashboard({ initialBriefing }: Props) {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <Header wsConnected={wsConnected} />
+
+      {/* Toolbar: settings + daily review */}
+      <div className="max-w-[1600px] mx-auto px-4 pt-3 flex gap-2 justify-end">
+        <button
+          onClick={() => setReviewOpen(true)}
+          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-gray-900 hover:bg-gray-800 border border-gray-800 px-3 py-1.5 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+          aria-label="Open end-of-day review"
+        >
+          🌅 <span>Daily Review</span>
+        </button>
+        <button
+          onClick={() => setSettingsOpen(true)}
+          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-gray-900 hover:bg-gray-800 border border-gray-800 px-3 py-1.5 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+          aria-label="Open settings"
+        >
+          ⚙️ <span>Settings</span>
+        </button>
+      </div>
 
       <main className="max-w-[1600px] mx-auto px-4 py-4">
         <ScoreRow briefing={briefing} />
@@ -99,10 +122,11 @@ export function Dashboard({ initialBriefing }: Props) {
             <JiraSection tickets={briefing.jira_tickets} isLive={briefing.integration_statuses?.jira} />
           </div>
 
-          {/* Column 3: Inbox Zero · Pomodoro · Todos */}
+          {/* Column 3: Inbox Zero · Pomodoro · Time Blocking · Todos */}
           <div className="space-y-4">
             <InboxZeroProgress briefing={briefing} />
             <PomodoroTimer />
+            <TimeBlocking />
             <TodoList
               todos={briefing.todos}
               onTodosChange={todos => setBriefing(prev => prev ? { ...prev, todos } : prev)}
@@ -112,6 +136,8 @@ export function Dashboard({ initialBriefing }: Props) {
       </main>
 
       <BriefingChat open={chatOpen} onToggle={() => setChatOpen(o => !o)} />
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <DailyReview open={reviewOpen} onClose={() => setReviewOpen(false)} />
     </div>
   );
 }

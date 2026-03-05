@@ -51,6 +51,7 @@ func run(args []string) error {
 	go hub.StartPolling()
 
 	server := api.NewServer(hub, cfg.Server.Host, cfg.Server.Port)
+	server.SetConfigPath(*configPath)
 
 	log.Printf("Starting Daily Briefing Dashboard...")
 	log.Printf("Open http://%s:%d in your browser", cfg.Server.Host, cfg.Server.Port)

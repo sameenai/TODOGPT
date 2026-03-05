@@ -118,10 +118,49 @@ func (s *TodoService) Delete(id string) bool {
 
 func (s *TodoService) Complete(id string) bool {
 	now := time.Now()
-	return s.Update(id, func(t *models.TodoItem) {
+	var spawned *models.TodoItem
+
+	ok := s.Update(id, func(t *models.TodoItem) {
 		t.Status = models.TodoDone
 		t.CompletedAt = &now
+		if t.Recurring != nil && t.Recurring.Enabled {
+			next := nextDueDate(t.Recurring, now)
+			spawned = &models.TodoItem{
+				Title:       t.Title,
+				Description: t.Description,
+				Priority:    t.Priority,
+				Status:      models.TodoPending,
+				Source:      t.Source,
+				SourceID:    t.SourceID,
+				SourceURL:   t.SourceURL,
+				Tags:        append([]string{}, t.Tags...),
+				Notes:       t.Notes,
+				Recurring:   t.Recurring,
+				DueDate:     &next,
+			}
+		}
 	})
+
+	if ok && spawned != nil {
+		s.Add(*spawned)
+	}
+	return ok
+}
+
+// nextDueDate computes the next occurrence based on the recurring rule.
+func nextDueDate(rule *models.RecurringRule, from time.Time) time.Time {
+	switch rule.Frequency {
+	case models.RecurringWeekly:
+		return from.AddDate(0, 0, 7)
+	case models.RecurringWeekdays:
+		next := from.AddDate(0, 0, 1)
+		for next.Weekday() == time.Saturday || next.Weekday() == time.Sunday {
+			next = next.AddDate(0, 0, 1)
+		}
+		return next
+	default: // RecurringDaily and unknown
+		return from.AddDate(0, 0, 1)
+	}
 }
 
 func (s *TodoService) SetItems(items []models.TodoItem) {

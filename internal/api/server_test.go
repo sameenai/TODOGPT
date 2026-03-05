@@ -526,6 +526,9 @@ func TestFullRouteIntegration(t *testing.T) {
 		{"GET", "/api/todos", 200},
 		{"GET", "/api/signals", 200},
 		{"GET", "/api/briefing", 200},
+		{"GET", "/api/config", 200},
+		{"GET", "/api/review", 200},
+		{"GET", "/api/timeblocks", 200},
 	}
 
 	for _, tc := range routes {
@@ -642,6 +645,297 @@ func TestMustJSONError(t *testing.T) {
 	result := mustJSON(make(chan int))
 	if string(result) != "{}" {
 		t.Errorf("expected empty JSON on marshal error, got %q", result)
+	}
+}
+
+// ── /api/config ───────────────────────────────────────────────────────────────
+
+func TestHandleConfigGet(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("GET", "/api/config", nil)
+	w := httptest.NewRecorder()
+
+	s.handleConfig(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var m map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if m["server"] == nil {
+		t.Error("expected server config in response")
+	}
+}
+
+func TestHandleConfigGetRedactsCredentials(t *testing.T) {
+	s := testServer(t)
+	// Set a token so we can verify redaction
+	s.hub.GetConfig().GitHub.Token = "secret-token"
+	s.hub.GetConfig().GitHub.Enabled = true
+
+	req := httptest.NewRequest("GET", "/api/config", nil)
+	w := httptest.NewRecorder()
+	s.handleConfig(w, req)
+
+	var m map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&m)
+	gh, _ := m["github"].(map[string]interface{})
+	if gh["token"] == "secret-token" {
+		t.Error("token should be redacted in GET response")
+	}
+	if gh["token"] != "***" {
+		t.Errorf("expected '***', got %v", gh["token"])
+	}
+}
+
+func TestHandleConfigPut(t *testing.T) {
+	s := testServer(t)
+	// Use a temp dir as cfgPath parent so Save works
+	dir := t.TempDir()
+	s.SetConfigPath(dir + "/config.json")
+
+	body := `{"server":{"port":9090,"poll_interval_seconds":60},"weather":{"city":"London","enabled":true},"github":{"token":"***"},"ai":{"enabled":false},"pomodoro":{"work_minutes":25,"break_minutes":5,"enabled":true}}`
+	req := httptest.NewRequest("PUT", "/api/config", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	s.handleConfig(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if result["ok"] != true {
+		t.Errorf("expected ok:true, got %v", result)
+	}
+	if s.hub.GetConfig().Weather.City != "London" {
+		t.Errorf("expected city London, got %q", s.hub.GetConfig().Weather.City)
+	}
+}
+
+func TestHandleConfigPutPreservesRedacted(t *testing.T) {
+	s := testServer(t)
+	s.hub.GetConfig().AI.APIKey = "real-key"
+	dir := t.TempDir()
+	s.SetConfigPath(dir + "/config.json")
+
+	body := `{"ai":{"api_key":"***","enabled":true}}`
+	req := httptest.NewRequest("PUT", "/api/config", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	s.handleConfig(w, req)
+
+	if s.hub.GetConfig().AI.APIKey != "real-key" {
+		t.Errorf("expected real-key preserved, got %q", s.hub.GetConfig().AI.APIKey)
+	}
+}
+
+func TestHandleConfigPutInvalidJSON(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("PUT", "/api/config", strings.NewReader("bad json"))
+	w := httptest.NewRecorder()
+	s.handleConfig(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleConfigMethodNotAllowed(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("DELETE", "/api/config", nil)
+	w := httptest.NewRecorder()
+	s.handleConfig(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
+	}
+}
+
+// ── /api/review ───────────────────────────────────────────────────────────────
+
+func TestHandleReviewGetDisabledAI(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("GET", "/api/review", nil)
+	w := httptest.NewRecorder()
+
+	s.handleReview(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var result map[string]string
+	json.NewDecoder(resp.Body).Decode(&result)
+	if result["review"] != "" {
+		t.Errorf("expected empty review when AI disabled, got %q", result["review"])
+	}
+}
+
+func TestHandleReviewMethodNotAllowed(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("POST", "/api/review", nil)
+	w := httptest.NewRecorder()
+	s.handleReview(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
+	}
+}
+
+// ── /api/timeblocks ───────────────────────────────────────────────────────────
+
+func TestHandleTimeBlocksGetDisabledAI(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("GET", "/api/timeblocks", nil)
+	w := httptest.NewRecorder()
+
+	s.handleTimeBlocks(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	blocks, ok := result["blocks"].([]interface{})
+	if !ok || len(blocks) != 0 {
+		t.Errorf("expected empty blocks array when AI disabled, got %v", result["blocks"])
+	}
+}
+
+func TestHandleTimeBlocksMethodNotAllowed(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("POST", "/api/timeblocks", nil)
+	w := httptest.NewRecorder()
+	s.handleTimeBlocks(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
+	}
+}
+
+func TestHandleConfigPutSaveError(t *testing.T) {
+	s := testServer(t)
+	// Set cfgPath to a non-writable location
+	s.SetConfigPath("/proc/cannot-write-here/config.json")
+
+	body := `{"server":{"port":8080}}`
+	req := httptest.NewRequest("PUT", "/api/config", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.handleConfig(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 on save error, got %d", w.Code)
+	}
+}
+
+func TestHandleReviewAIError(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Server.DataDir = t.TempDir()
+	cfg.AI.Enabled = true
+	cfg.AI.APIKey = "key"
+	hub := services.NewHub(cfg)
+
+	// Point at unreachable port
+	origURL := services.ExportClaudeAPIURL()
+	services.SetClaudeAPIURL("http://127.0.0.1:1")
+	defer services.SetClaudeAPIURL(origURL)
+
+	s := NewServer(hub, "localhost", 8080)
+	go s.wsHub.Run()
+
+	req := httptest.NewRequest("GET", "/api/review", nil)
+	w := httptest.NewRecorder()
+	s.handleReview(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 on AI error, got %d", w.Code)
+	}
+}
+
+func TestHandleTimeBlocksAIError(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Server.DataDir = t.TempDir()
+	cfg.AI.Enabled = true
+	cfg.AI.APIKey = "key"
+	hub := services.NewHub(cfg)
+
+	origURL := services.ExportClaudeAPIURL()
+	services.SetClaudeAPIURL("http://127.0.0.1:1")
+	defer services.SetClaudeAPIURL(origURL)
+
+	s := NewServer(hub, "localhost", 8080)
+	go s.wsHub.Run()
+
+	req := httptest.NewRequest("GET", "/api/timeblocks", nil)
+	w := httptest.NewRecorder()
+	s.handleTimeBlocks(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 on AI error, got %d", w.Code)
+	}
+}
+
+func TestGetConfig(t *testing.T) {
+	s := testServer(t)
+	cfg := s.hub.GetConfig()
+	if cfg == nil {
+		t.Fatal("expected non-nil config from hub.GetConfig()")
+	}
+}
+
+func TestMergeConfigUpdatesCredentials(t *testing.T) {
+	existing := config.DefaultConfig()
+	existing.GitHub.Token = "old-token"
+	existing.AI.APIKey = "old-key"
+
+	incoming := config.DefaultConfig()
+	incoming.GitHub.Token = "new-token"
+	incoming.AI.APIKey = "new-key"
+
+	merged := mergeConfig(existing, incoming)
+	if merged.GitHub.Token != "new-token" {
+		t.Errorf("expected new-token, got %q", merged.GitHub.Token)
+	}
+	if merged.AI.APIKey != "new-key" {
+		t.Errorf("expected new-key, got %q", merged.AI.APIKey)
+	}
+}
+
+func TestMaskConfigNoSensitiveFields(t *testing.T) {
+	s := testServer(t)
+	cfg := config.DefaultConfig()
+	// No credentials set — nothing to redact
+	m := s.maskConfig(cfg)
+	if m == nil {
+		t.Fatal("expected non-nil map")
+	}
+}
+
+func TestHandleTodoActionSetRecurring(t *testing.T) {
+	s := testServer(t)
+	go s.wsHub.Run()
+
+	s.hub.Todos.Add(models.TodoItem{ID: "rec-set", Title: "Daily task"})
+
+	body := `{"recurring":{"frequency":"daily","enabled":true}}`
+	req := httptest.NewRequest("PATCH", "/api/todos/rec-set", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	s.handleTodoAction(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	for _, it := range s.hub.Todos.List() {
+		if it.ID == "rec-set" {
+			if it.Recurring == nil || !it.Recurring.Enabled {
+				t.Error("expected recurring rule to be set")
+			}
+			break
+		}
 	}
 }
 
