@@ -155,7 +155,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.pomodoroRunning {
 			m.pomodoroLeft -= time.Second
 			if m.pomodoroLeft <= 0 {
-				// Phase complete — switch phases
+				// Phase complete — switch phases and notify.
+				prevWork := m.pomodoroWork
 				m.pomodoroWork = !m.pomodoroWork
 				breakDur := time.Duration(m.pomodoroCfg.BreakMinutes) * time.Minute
 				if breakDur == 0 {
@@ -170,6 +171,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.pomodoroLeft = breakDur
 				}
+				var notifTitle, notifBody string
+				if prevWork {
+					notifTitle = "Pomodoro: break time"
+					notifBody = fmt.Sprintf("Work session complete! Take a %d-minute break.", m.pomodoroCfg.BreakMinutes)
+				} else {
+					notifTitle = "Pomodoro: back to work"
+					notifBody = fmt.Sprintf("Break over. Start your %d-minute focus session.", m.pomodoroCfg.WorkMinutes)
+				}
+				return m, tea.Batch(schedulePomodoroTick(), sendNotificationCmd(notifTitle, notifBody))
 			}
 			return m, schedulePomodoroTick()
 		}

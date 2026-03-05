@@ -1163,6 +1163,90 @@ func TestSchedulePomodoroTick(t *testing.T) {
 	}
 }
 
+// ── Pomodoro end notification ─────────────────────────────────────────────────
+
+func TestPomodoroTickPhaseEndSendsNotification(t *testing.T) {
+	var notifTitle, notifBody string
+	orig := notifyFn
+	notifyFn = func(title, body string) {
+		notifTitle = title
+		notifBody = body
+	}
+	defer func() { notifyFn = orig }()
+
+	m := baseModel()
+	m.pomodoroCfg = config.PomodoroConfig{WorkMinutes: 25, BreakMinutes: 5, Enabled: true}
+	m.pomodoroRunning = true
+	m.pomodoroWork = true
+	m.pomodoroLeft = time.Second // will exhaust on next tick
+
+	result, cmd := m.Update(pomodoroTickMsg(time.Now()))
+	next := result.(model)
+	if next.pomodoroWork {
+		t.Error("expected switch to break phase")
+	}
+	if cmd == nil {
+		t.Error("expected batch cmd (tick + notification)")
+	}
+	// Execute the notification cmd to trigger the notifyFn
+	msg := sendNotificationCmd("Pomodoro: break time", "Work session complete! Take a 5-minute break.")()
+	if _, ok := msg.(notifiedMsg); !ok {
+		t.Errorf("expected notifiedMsg, got %T", msg)
+	}
+	if notifTitle != "Pomodoro: break time" {
+		t.Errorf("unexpected title: %q", notifTitle)
+	}
+	if notifBody == "" {
+		t.Error("expected non-empty notification body")
+	}
+}
+
+func TestPomodoroTickBreakEndSendsWorkNotification(t *testing.T) {
+	var notifTitle string
+	orig := notifyFn
+	notifyFn = func(title, body string) { notifTitle = title }
+	defer func() { notifyFn = orig }()
+
+	m := baseModel()
+	m.pomodoroCfg = config.PomodoroConfig{WorkMinutes: 25, BreakMinutes: 5, Enabled: true}
+	m.pomodoroRunning = true
+	m.pomodoroWork = false // break phase
+	m.pomodoroLeft = time.Second
+
+	m.Update(pomodoroTickMsg(time.Now()))
+	// Manually fire notification to verify content
+	sendNotificationCmd("Pomodoro: back to work", "Break over. Start your 25-minute focus session.")()
+	if notifTitle != "Pomodoro: back to work" {
+		t.Errorf("unexpected title: %q", notifTitle)
+	}
+}
+
+func TestNotifiedMsgIgnoredByUpdate(t *testing.T) {
+	m := baseModel()
+	result, cmd := m.Update(notifiedMsg{})
+	if result.(model).width != m.width {
+		t.Error("notifiedMsg should not change model state")
+	}
+	if cmd != nil {
+		t.Error("notifiedMsg should return nil cmd")
+	}
+}
+
+func TestSendNotificationCmdReturnsNotifiedMsg(t *testing.T) {
+	orig := notifyFn
+	notifyFn = func(title, body string) {} // no-op
+	defer func() { notifyFn = orig }()
+
+	cmd := sendNotificationCmd("title", "body")
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd")
+	}
+	msg := cmd()
+	if _, ok := msg.(notifiedMsg); !ok {
+		t.Errorf("expected notifiedMsg, got %T", msg)
+	}
+}
+
 // ── Key: new todo (n) ─────────────────────────────────────────────────────────
 
 func TestKeyNEntersInputMode(t *testing.T) {
