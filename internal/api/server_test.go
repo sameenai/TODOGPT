@@ -273,8 +273,8 @@ func TestHandleTodosPost(t *testing.T) {
 	s.handleTodos(w, req)
 
 	resp := w.Result()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("expected status 201, got %d", resp.StatusCode)
 	}
 
 	var todo models.TodoItem
@@ -286,6 +286,9 @@ func TestHandleTodosPost(t *testing.T) {
 	}
 	if todo.Source != "manual" {
 		t.Errorf("expected source 'manual', got %q", todo.Source)
+	}
+	if todo.ID == "" {
+		t.Error("expected non-empty ID in POST response")
 	}
 }
 
@@ -349,6 +352,58 @@ func TestHandleTodoActionUpdate(t *testing.T) {
 				t.Error("expected CompletedAt to be set")
 			}
 		}
+	}
+}
+
+func TestHandleTodoActionComplete(t *testing.T) {
+	s := testServer(t)
+	go s.wsHub.Run()
+
+	s.hub.Todos.Add(models.TodoItem{ID: "comp-1", Title: "Complete Me"})
+
+	req := httptest.NewRequest("POST", "/api/todos/comp-1/complete", nil)
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	// Verify it's marked done
+	for _, item := range s.hub.Todos.List() {
+		if item.ID == "comp-1" {
+			if item.Status != models.TodoDone {
+				t.Errorf("expected status Done, got %d", item.Status)
+			}
+		}
+	}
+}
+
+func TestHandleTodoActionCompleteNotFound(t *testing.T) {
+	s := testServer(t)
+	go s.wsHub.Run()
+
+	req := httptest.NewRequest("POST", "/api/todos/nonexistent/complete", nil)
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestHandleTodoActionCompleteWrongMethod(t *testing.T) {
+	s := testServer(t)
+	go s.wsHub.Run()
+
+	s.hub.Todos.Add(models.TodoItem{ID: "comp-m", Title: "Complete Method"})
+	req := httptest.NewRequest("GET", "/api/todos/comp-m/complete", nil)
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
 	}
 }
 
@@ -554,7 +609,7 @@ func TestTodoPostAndList(t *testing.T) {
 	w := httptest.NewRecorder()
 	s.mux.ServeHTTP(w, req)
 
-	if w.Code != 200 {
+	if w.Code != http.StatusCreated {
 		t.Fatalf("POST /api/todos returned %d", w.Code)
 	}
 

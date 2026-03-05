@@ -75,7 +75,7 @@ func (s *TodoService) List() []models.TodoItem {
 	return result
 }
 
-func (s *TodoService) Add(item models.TodoItem) {
+func (s *TodoService) Add(item models.TodoItem) models.TodoItem {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if item.ID == "" {
@@ -87,6 +87,7 @@ func (s *TodoService) Add(item models.TodoItem) {
 	item.UpdatedAt = time.Now()
 	s.items = append(s.items, item)
 	s.persist()
+	return item
 }
 
 func (s *TodoService) Update(id string, fn func(*models.TodoItem)) bool {

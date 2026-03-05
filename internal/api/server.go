@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/todogpt/daily-briefing/internal/config"
@@ -182,8 +183,9 @@ func (s *Server) handleTodos(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		item.Source = "manual"
-		s.hub.Todos.Add(item)
+		item = s.hub.Todos.Add(item)
 		s.wsHub.Broadcast(mustJSON(models.DashboardUpdate{Type: "todos_updated", Payload: s.hub.Todos.List()}))
+		w.WriteHeader(http.StatusCreated)
 		s.writeJSON(w, item)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -191,13 +193,37 @@ func (s *Server) handleTodos(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTodoAction(w http.ResponseWriter, r *http.Request) {
-	// Extract ID from /api/todos/{id}
-	id := r.URL.Path[len("/api/todos/"):]
-	if id == "" {
+	// Extract ID from /api/todos/{id} or /api/todos/{id}/complete
+	rawPath := r.URL.Path[len("/api/todos/"):]
+	if rawPath == "" {
 		http.Error(w, "ID required", http.StatusBadRequest)
 		return
 	}
 
+	// Handle /api/todos/{id}/complete
+	if strings.HasSuffix(rawPath, "/complete") {
+		id := strings.TrimSuffix(rawPath, "/complete")
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if !s.hub.Todos.Complete(id) {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		s.wsHub.Broadcast(mustJSON(models.DashboardUpdate{Type: "todos_updated", Payload: s.hub.Todos.List()}))
+		// Return the updated todo
+		for _, t := range s.hub.Todos.List() {
+			if t.ID == id {
+				s.writeJSON(w, t)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	id := rawPath
 	switch r.Method {
 	case "PUT", "PATCH":
 		var updates struct {
@@ -237,6 +263,13 @@ func (s *Server) handleTodoAction(w http.ResponseWriter, r *http.Request) {
 			}
 		})
 		s.wsHub.Broadcast(mustJSON(models.DashboardUpdate{Type: "todos_updated", Payload: s.hub.Todos.List()}))
+		// Return the updated todo
+		for _, t := range s.hub.Todos.List() {
+			if t.ID == id {
+				s.writeJSON(w, t)
+				return
+			}
+		}
 		w.WriteHeader(http.StatusOK)
 	case "DELETE":
 		s.hub.Todos.Delete(id)

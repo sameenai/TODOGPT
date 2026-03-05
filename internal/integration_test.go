@@ -84,8 +84,8 @@ func TestTodoLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("POST /api/todos error: %v", err)
 	}
-	if resp.StatusCode != 200 {
-		t.Fatalf("POST /api/todos expected 200, got %d", resp.StatusCode)
+	if resp.StatusCode != 201 {
+		t.Fatalf("POST /api/todos expected 201, got %d", resp.StatusCode)
 	}
 
 	var created models.TodoItem
