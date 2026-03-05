@@ -176,6 +176,28 @@ func (h *Hub) FetchAll() *models.Briefing {
 		briefing.GitHubNotifs = notifs
 	}()
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		tickets, err := h.Jira.Fetch()
+		if err != nil {
+			log.Printf("Jira fetch error: %v", err)
+			return
+		}
+		briefing.JiraTickets = tickets
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		pages, err := h.Notion.Fetch()
+		if err != nil {
+			log.Printf("Notion fetch error: %v", err)
+			return
+		}
+		briefing.NotionPages = pages
+	}()
+
 	wg.Wait()
 
 	// Auto-generate todos from signals
