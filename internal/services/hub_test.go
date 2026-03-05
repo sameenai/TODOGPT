@@ -1,6 +1,7 @@
 package services
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -9,7 +10,10 @@ import (
 )
 
 func testConfig() *config.Config {
-	return config.DefaultConfig()
+	cfg := config.DefaultConfig()
+	// Use a temp dir so tests are isolated from ~/.daily-briefing/todos.json
+	cfg.Server.DataDir = os.TempDir() + "/todogpt-test-hub"
+	return cfg
 }
 
 func TestNewHub(t *testing.T) {

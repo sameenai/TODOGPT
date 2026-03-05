@@ -87,6 +87,9 @@ type model struct {
 	height       int
 	loading      bool
 	lastFetch    time.Time
+	// Todo input mode (n key opens inline new-todo prompt)
+	inputMode bool
+	inputText string
 	// Pomodoro timer
 	pomodoroCfg     config.PomodoroConfig
 	pomodoroRunning bool
@@ -173,6 +176,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		key := msg.String()
+		// In input mode, only esc/ctrl+c quit; all other keys go to input handler
+		if m.inputMode {
+			if key == "ctrl+c" {
+				return m, tea.Quit
+			}
+			return m.applyInputKey(key), nil
+		}
 		if key == "q" || key == "ctrl+c" {
 			return m, tea.Quit
 		}
@@ -237,12 +247,82 @@ func (m model) applyKey(key string) model {
 			}
 		}
 
+	case "n":
+		if m.activeTab == secTodos {
+			m.inputMode = true
+			m.inputText = ""
+		}
+
+	case "d":
+		if m.activeTab == secTodos && m.briefing != nil && m.hub != nil {
+			pending := filterPending(m.briefing.Todos)
+			if m.selectedTodo < len(pending) {
+				m.hub.Todos.Delete(pending[m.selectedTodo].ID)
+				m.briefing.Todos = m.hub.Todos.List()
+				n := countPending(m.briefing.Todos)
+				if m.selectedTodo >= n && m.selectedTodo > 0 {
+					m.selectedTodo = n - 1
+				}
+			}
+		}
+
+	case "i":
+		if m.activeTab == secTodos && m.briefing != nil && m.hub != nil {
+			pending := filterPending(m.briefing.Todos)
+			if m.selectedTodo < len(pending) {
+				todo := pending[m.selectedTodo]
+				if todo.Status == models.TodoInProgress {
+					m.hub.Todos.Update(todo.ID, func(t *models.TodoItem) {
+						t.Status = models.TodoPending
+					})
+				} else {
+					m.hub.Todos.Update(todo.ID, func(t *models.TodoItem) {
+						t.Status = models.TodoInProgress
+					})
+				}
+				m.briefing.Todos = m.hub.Todos.List()
+			}
+		}
+
 	case "r":
 		m.loading = true
 
 	case "p":
 		if m.pomodoroCfg.Enabled {
 			m.pomodoroRunning = !m.pomodoroRunning
+		}
+	}
+	return m
+}
+
+// applyInputKey handles keystrokes when the new-todo input prompt is open.
+func (m model) applyInputKey(key string) model {
+	switch key {
+	case "esc":
+		m.inputMode = false
+		m.inputText = ""
+	case "enter":
+		if m.inputText != "" && m.hub != nil {
+			m.hub.Todos.Add(models.TodoItem{
+				Title:    m.inputText,
+				Priority: models.PriorityMedium,
+				Status:   models.TodoPending,
+				Source:   "manual",
+			})
+			if m.briefing != nil {
+				m.briefing.Todos = m.hub.Todos.List()
+			}
+		}
+		m.inputMode = false
+		m.inputText = ""
+	case "backspace":
+		if len(m.inputText) > 0 {
+			m.inputText = m.inputText[:len(m.inputText)-1]
+		}
+	default:
+		// Accept printable single-rune keys
+		if len(key) == 1 {
+			m.inputText += key
 		}
 	}
 	return m
@@ -365,12 +445,16 @@ func (m model) badge(sec int) string {
 
 func (m model) viewStatusBar() string {
 	var keys []string
-	if m.activeTab == secTodos {
-		keys = append(keys, "↑/↓ select", "space/enter done")
+	if m.inputMode {
+		keys = append(keys, "type title", "enter confirm", "esc cancel")
+	} else if m.activeTab == secTodos {
+		keys = append(keys, "↑/↓ select", "space/enter done", "i in-progress", "d delete", "n new")
 	} else {
 		keys = append(keys, "↑/↓ scroll")
 	}
-	keys = append(keys, "←/→ tab", "1-7 jump", "r refresh", "q quit")
+	if !m.inputMode {
+		keys = append(keys, "←/→ tab", "1-7 jump", "r refresh", "q quit")
+	}
 	left := "  " + strings.Join(keys, "  ·  ")
 
 	var right string

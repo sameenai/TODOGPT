@@ -23,6 +23,7 @@ type ServerConfig struct {
 	Port         int    `json:"port"`
 	Host         string `json:"host"`
 	PollInterval int    `json:"poll_interval_seconds"`
+	DataDir      string `json:"data_dir,omitempty"` // overrides ~/.daily-briefing for all persistent data
 }
 
 type WeatherConfig struct {
