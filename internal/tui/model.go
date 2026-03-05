@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/todogpt/daily-briefing/internal/config"
 	"github.com/todogpt/daily-briefing/internal/models"
 	"github.com/todogpt/daily-briefing/internal/services"
 )
@@ -70,6 +71,9 @@ type fetchDoneMsg struct{ briefing *models.Briefing }
 
 type tickMsg time.Time
 
+// pomodoroTickMsg fires every second when the pomodoro timer is running.
+type pomodoroTickMsg time.Time
+
 // ── Model ─────────────────────────────────────────────────────────────────────
 
 // model is the bubbletea application model for the dashboard TUI.
@@ -83,16 +87,35 @@ type model struct {
 	height       int
 	loading      bool
 	lastFetch    time.Time
+	// Pomodoro timer
+	pomodoroCfg     config.PomodoroConfig
+	pomodoroRunning bool
+	pomodoroWork    bool // true = work phase, false = break phase
+	pomodoroLeft    time.Duration
 }
 
-// newModel constructs the initial model for a given Hub.
-func newModel(hub *services.Hub) model {
-	return model{hub: hub, loading: true}
+// newModel constructs the initial model for a given Hub and pomodoro config.
+func newModel(hub *services.Hub, pomodoro config.PomodoroConfig) model {
+	workDur := time.Duration(pomodoro.WorkMinutes) * time.Minute
+	if workDur == 0 {
+		workDur = 25 * time.Minute
+	}
+	return model{
+		hub:          hub,
+		loading:      true,
+		pomodoroCfg:  pomodoro,
+		pomodoroWork: true,
+		pomodoroLeft: workDur,
+	}
 }
 
 // Init implements tea.Model – kicks off an initial fetch and periodic tick.
 func (m model) Init() tea.Cmd {
 	return tea.Batch(doFetch(m.hub), scheduleTick())
+}
+
+func schedulePomodoroTick() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg { return pomodoroTickMsg(t) })
 }
 
 func doFetch(hub *services.Hub) tea.Cmd {
@@ -125,11 +148,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		return m, tea.Batch(doFetch(m.hub), scheduleTick())
 
+	case pomodoroTickMsg:
+		if m.pomodoroRunning {
+			m.pomodoroLeft -= time.Second
+			if m.pomodoroLeft <= 0 {
+				// Phase complete — switch phases
+				m.pomodoroWork = !m.pomodoroWork
+				breakDur := time.Duration(m.pomodoroCfg.BreakMinutes) * time.Minute
+				if breakDur == 0 {
+					breakDur = 5 * time.Minute
+				}
+				workDur := time.Duration(m.pomodoroCfg.WorkMinutes) * time.Minute
+				if workDur == 0 {
+					workDur = 25 * time.Minute
+				}
+				if m.pomodoroWork {
+					m.pomodoroLeft = workDur
+				} else {
+					m.pomodoroLeft = breakDur
+				}
+			}
+			return m, schedulePomodoroTick()
+		}
+
 	case tea.KeyMsg:
-		if key := msg.String(); key == "q" || key == "ctrl+c" {
+		key := msg.String()
+		if key == "q" || key == "ctrl+c" {
 			return m, tea.Quit
 		}
-		return m.applyKey(msg.String()), nil
+		next := m.applyKey(key)
+		// If pomodoro just started, kick off the per-second tick.
+		if key == "p" && next.pomodoroRunning && !m.pomodoroRunning {
+			return next, schedulePomodoroTick()
+		}
+		return next, nil
 	}
 	return m, nil
 }
@@ -187,6 +239,11 @@ func (m model) applyKey(key string) model {
 
 	case "r":
 		m.loading = true
+
+	case "p":
+		if m.pomodoroCfg.Enabled {
+			m.pomodoroRunning = !m.pomodoroRunning
+		}
 	}
 	return m
 }
@@ -314,7 +371,30 @@ func (m model) viewStatusBar() string {
 		keys = append(keys, "↑/↓ scroll")
 	}
 	keys = append(keys, "←/→ tab", "1-7 jump", "r refresh", "q quit")
-	return statusBarStyle.Width(m.width).Render("  " + strings.Join(keys, "  ·  "))
+	left := "  " + strings.Join(keys, "  ·  ")
+
+	var right string
+	if m.pomodoroCfg.Enabled {
+		mins := int(m.pomodoroLeft.Minutes())
+		secs := int(m.pomodoroLeft.Seconds()) % 60
+		phase := "work"
+		icon := "🍅"
+		if !m.pomodoroWork {
+			phase = "break"
+			icon = "☕"
+		}
+		state := fmt.Sprintf("%s %02d:%02d %s", icon, mins, secs, phase)
+		if !m.pomodoroRunning {
+			state += " (p to start)"
+		}
+		right = "  " + state + "  "
+	}
+
+	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
+	if gap < 0 {
+		gap = 0
+	}
+	return statusBarStyle.Width(m.width).Render(left + strings.Repeat(" ", gap) + right)
 }
 
 func (m model) viewSection(height int) string {
@@ -359,8 +439,8 @@ func (m model) viewSection(height int) string {
 }
 
 // Run starts the bubbletea TUI. Called from cmd/tui/main.go.
-func Run(hub *services.Hub) error {
-	p := tea.NewProgram(newModel(hub), tea.WithAltScreen())
+func Run(hub *services.Hub, pomodoro config.PomodoroConfig) error {
+	p := tea.NewProgram(newModel(hub, pomodoro), tea.WithAltScreen())
 	_, err := p.Run()
 	return err
 }
