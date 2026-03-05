@@ -151,12 +151,21 @@ func (m model) renderGitHub() string {
 }
 
 func (m model) renderTodos() string {
+	var sb strings.Builder
+
+	// Input prompt shown at top when creating a new todo
+	if m.inputMode {
+		sb.WriteString(titleStyle.Render("  New todo") + "\n\n")
+		sb.WriteString(fmt.Sprintf("  > %s%s\n\n", m.inputText, cursorStyle.Render("█")))
+	}
+
 	pending := filterPending(m.briefing.Todos)
-	if len(pending) == 0 {
+	if len(pending) == 0 && !m.inputMode {
 		return successStyle.Render("  All done! No pending action items.") + "\n"
 	}
-	var sb strings.Builder
-	sb.WriteString(titleStyle.Render(fmt.Sprintf("  %d action items", len(pending))) + "\n\n")
+	if len(pending) > 0 {
+		sb.WriteString(titleStyle.Render(fmt.Sprintf("  %d action items", len(pending))) + "\n\n")
+	}
 	for i, t := range pending {
 		var priorityStr string
 		switch t.Priority {
@@ -172,13 +181,19 @@ func (m model) renderTodos() string {
 
 		cursor := "  "
 		title := t.Title
-		if i == m.selectedTodo {
+		statusMark := ""
+		if t.Status == models.TodoInProgress {
+			statusMark = highStyle.Render(" ●")
+		}
+		if i == m.selectedTodo && !m.inputMode {
 			cursor = cursorStyle.Render("▸ ")
 			title = selectedStyle.Render(t.Title)
 		}
-		sb.WriteString(fmt.Sprintf("  %s%s  %s\n", cursor, priorityStr, title))
+		sb.WriteString(fmt.Sprintf("  %s%s  %s%s\n", cursor, priorityStr, title, statusMark))
 		sb.WriteString(fmt.Sprintf("             %s\n\n", dimStyle.Render(t.Source)))
 	}
-	sb.WriteString(dimStyle.Render("  space/enter: mark done  ↑/↓: navigate") + "\n")
+	if !m.inputMode {
+		sb.WriteString(dimStyle.Render("  space/enter: done  i: in-progress  d: delete  n: new") + "\n")
+	}
 	return sb.String()
 }
