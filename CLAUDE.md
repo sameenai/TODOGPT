@@ -65,3 +65,23 @@ The app has three binaries sharing the same `internal/` packages:
 ### Linting
 
 `golangci-lint` is configured in `.golangci.yml` with: `errcheck`, `govet`, `staticcheck`, `unused`, `ineffassign`, `gocritic`. Errors from `fmt.Printf`/`fmt.Println`/`http.ResponseWriter.Write` are excluded. Test files are excluded from `errcheck`.
+
+## Git workflow
+
+Branch naming: `claude/<short-description>` (e.g. `claude/tui-security-audit-coverage`)
+
+Standard flow:
+```bash
+git checkout -b claude/<description>
+# make changes, run make ci && make audit
+git add <files>
+git commit -m "..."
+git push -u origin claude/<description>
+# create PR via GitHub MCP tool (owner: sameenai, repo: TODOGPT)
+# merge via GitHub MCP tool with squash method
+git checkout main && git pull origin main
+git branch -d claude/<description>
+git push origin --delete claude/<description>
+```
+
+Always run `make ci` (and `make audit` for security-relevant changes) before committing. Update `CLAUDE.md` whenever new commands, architectural patterns, or workflow conventions are established.
