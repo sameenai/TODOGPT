@@ -7,6 +7,7 @@ import (
 
 	"github.com/todogpt/daily-briefing/internal/config"
 	"github.com/todogpt/daily-briefing/internal/models"
+	"github.com/todogpt/daily-briefing/internal/todo"
 )
 
 // Hub aggregates all services and manages polling/updates.
@@ -28,6 +29,7 @@ type Hub struct {
 }
 
 func NewHub(cfg *config.Config) *Hub {
+	todosvc := newTodoService(cfg)
 	return &Hub{
 		Weather:  NewWeatherService(cfg.Weather),
 		News:     NewNewsService(cfg.News),
@@ -37,10 +39,27 @@ func NewHub(cfg *config.Config) *Hub {
 		GitHub:   NewGitHubService(cfg.GitHub),
 		Jira:     NewJiraService(cfg.Jira),
 		Notion:   NewNotionService(cfg.Notion),
-		Todos:    NewTodoService(),
+		Todos:    todosvc,
 		cfg:      cfg,
 		stopCh:   make(chan struct{}),
 	}
+}
+
+// newTodoService creates a TodoService, attaching a persistent Store when
+// possible. Falls back to an in-memory-only service on error.
+func newTodoService(cfg *config.Config) *TodoService {
+	// When DataDir is set (e.g. in tests), use an explicit path instead of the
+	// default ~/.daily-briefing directory.
+	storePath := ""
+	if cfg.Server.DataDir != "" {
+		storePath = cfg.Server.DataDir + "/todos.json"
+	}
+	store, err := todo.NewStore(storePath)
+	if err != nil {
+		log.Printf("todo store unavailable, using in-memory todos: %v", err)
+		return NewTodoService()
+	}
+	return NewTodoServiceWithStore(store)
 }
 
 func (h *Hub) Subscribe() chan models.DashboardUpdate {
@@ -155,28 +174,6 @@ func (h *Hub) FetchAll() *models.Briefing {
 			return
 		}
 		briefing.GitHubNotifs = notifs
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		tickets, err := h.Jira.Fetch()
-		if err != nil {
-			log.Printf("Jira fetch error: %v", err)
-			return
-		}
-		briefing.JiraTickets = tickets
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		pages, err := h.Notion.Fetch()
-		if err != nil {
-			log.Printf("Notion fetch error: %v", err)
-			return
-		}
-		briefing.NotionPages = pages
 	}()
 
 	wg.Wait()

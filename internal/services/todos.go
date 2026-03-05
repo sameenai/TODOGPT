@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -9,17 +10,60 @@ import (
 	"github.com/todogpt/daily-briefing/internal/models"
 )
 
+// todoStorer is the persistence backend for TodoService.
+// todo.Store satisfies this interface.
+type todoStorer interface {
+	All() []models.TodoItem
+	SetAll([]models.TodoItem) error
+}
+
 // TodoService manages the smart interactive todo list.
 type TodoService struct {
 	items []models.TodoItem
 	mu    sync.RWMutex
 	seen  map[string]bool // track source IDs to avoid duplicates
+	store todoStorer      // optional persistence backend; nil = in-memory only
 }
 
 func NewTodoService() *TodoService {
 	return &TodoService{
 		items: []models.TodoItem{},
 		seen:  make(map[string]bool),
+	}
+}
+
+// NewTodoServiceWithStore creates a TodoService backed by persistent storage.
+// Existing items are loaded from store immediately, and the seen map is
+// populated so GenerateFromBriefing won't re-add already-persisted todos.
+func NewTodoServiceWithStore(store todoStorer) *TodoService {
+	svc := &TodoService{
+		items: []models.TodoItem{},
+		seen:  make(map[string]bool),
+		store: store,
+	}
+	if items := store.All(); len(items) > 0 {
+		svc.items = items
+		for _, item := range items {
+			if item.Source != "" && item.SourceID != "" {
+				// Add both forms to handle the different key formats used by
+				// GenerateFromBriefing (email/github/calendar use "source:rawID";
+				// slack stores the full key in SourceID directly).
+				svc.seen[item.SourceID] = true
+				svc.seen[item.Source+":"+item.SourceID] = true
+			}
+		}
+	}
+	return svc
+}
+
+// persist saves the current items to the backing store, if one is set.
+// Must be called with s.mu held.
+func (s *TodoService) persist() {
+	if s.store == nil {
+		return
+	}
+	if err := s.store.SetAll(s.items); err != nil {
+		log.Printf("todo persist error: %v", err)
 	}
 }
 
@@ -42,6 +86,7 @@ func (s *TodoService) Add(item models.TodoItem) {
 	}
 	item.UpdatedAt = time.Now()
 	s.items = append(s.items, item)
+	s.persist()
 }
 
 func (s *TodoService) Update(id string, fn func(*models.TodoItem)) bool {
@@ -51,6 +96,7 @@ func (s *TodoService) Update(id string, fn func(*models.TodoItem)) bool {
 		if s.items[i].ID == id {
 			fn(&s.items[i])
 			s.items[i].UpdatedAt = time.Now()
+			s.persist()
 			return true
 		}
 	}
@@ -63,6 +109,7 @@ func (s *TodoService) Delete(id string) bool {
 	for i := range s.items {
 		if s.items[i].ID == id {
 			s.items = append(s.items[:i], s.items[i+1:]...)
+			s.persist()
 			return true
 		}
 	}
@@ -81,6 +128,7 @@ func (s *TodoService) SetItems(items []models.TodoItem) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.items = items
+	s.persist()
 }
 
 // GenerateFromBriefing extracts actionable todos from all signal sources.
@@ -298,6 +346,8 @@ func (s *TodoService) GenerateFromBriefing(b *models.Briefing) {
 			})
 		}
 	}
+
+	s.persist()
 }
 
 func truncate(s string, maxLen int) string {

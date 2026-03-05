@@ -12,6 +12,7 @@ import (
 // the periodic ticker, not just on initial start.
 func TestHubStartPollingTickerFires(t *testing.T) {
 	cfg := config.DefaultConfig()
+	cfg.Server.DataDir = t.TempDir()
 	cfg.Server.PollInterval = 1 // 1-second interval
 
 	hub := NewHub(cfg)
@@ -42,6 +43,7 @@ func TestHubStartPollingTickerFires(t *testing.T) {
 // TestHubStopBeforeTicker ensures Stop() before the ticker fires doesn't block.
 func TestHubStopBeforeTicker(t *testing.T) {
 	cfg := config.DefaultConfig()
+	cfg.Server.DataDir = t.TempDir()
 	cfg.Server.PollInterval = 60 // long interval
 
 	hub := NewHub(cfg)

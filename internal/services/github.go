@@ -1,12 +1,18 @@
 package services
 
 import (
+	"encoding/json"
+	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/todogpt/daily-briefing/internal/config"
 	"github.com/todogpt/daily-briefing/internal/models"
 )
+
+// githubAPIBaseURL is package-level so tests can override it.
+var githubAPIBaseURL = "https://api.github.com"
 
 type GitHubService struct {
 	cfg   config.GitHubConfig
@@ -18,13 +24,105 @@ func NewGitHubService(cfg config.GitHubConfig) *GitHubService {
 	return &GitHubService{cfg: cfg}
 }
 
+// githubNotification is the raw API response shape from GET /notifications.
+type githubNotification struct {
+	ID   string `json:"id"`
+	Repo struct {
+		FullName string `json:"full_name"`
+	} `json:"repository"`
+	Subject struct {
+		Title string `json:"title"`
+		URL   string `json:"url"`
+		Type  string `json:"type"`
+	} `json:"subject"`
+	Reason    string `json:"reason"`
+	Unread    bool   `json:"unread"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 func (s *GitHubService) Fetch() ([]models.GitHubNotification, error) {
-	// When a GitHub token is configured, this would use the GitHub API.
-	notifs := s.mockNotifications()
+	if !s.cfg.Enabled || s.cfg.Token == "" {
+		notifs := s.mockNotifications()
+		s.mu.Lock()
+		s.cache = notifs
+		s.mu.Unlock()
+		return notifs, nil
+	}
+
+	notifs, err := s.fetchFromAPI()
+	if err != nil {
+		// Fall back to cache or mock on API error
+		s.mu.RLock()
+		cached := s.cache
+		s.mu.RUnlock()
+		if cached != nil {
+			return cached, nil
+		}
+		return s.mockNotifications(), nil
+	}
+
 	s.mu.Lock()
 	s.cache = notifs
 	s.mu.Unlock()
 	return notifs, nil
+}
+
+func (s *GitHubService) fetchFromAPI() ([]models.GitHubNotification, error) {
+	url := githubAPIBaseURL + "/notifications?all=false&per_page=50"
+	req, err := http.NewRequest(http.MethodGet, url, nil) // #nosec G107
+	if err != nil {
+		return nil, fmt.Errorf("github: create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+s.cfg.Token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("github: request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("github: API returned status %d", resp.StatusCode)
+	}
+
+	var raw []githubNotification
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("github: decode error: %w", err)
+	}
+
+	notifs := make([]models.GitHubNotification, 0, len(raw))
+	for _, n := range raw {
+		updatedAt, _ := time.Parse(time.RFC3339, n.UpdatedAt)
+		notif := models.GitHubNotification{
+			ID:        n.ID,
+			Title:     n.Subject.Title,
+			Repo:      n.Repo.FullName,
+			Type:      n.Subject.Type,
+			URL:       n.Subject.URL,
+			Reason:    n.Reason,
+			Unread:    n.Unread,
+			UpdatedAt: updatedAt,
+		}
+		// Filter to configured repos if specified
+		if len(s.cfg.Repos) > 0 && !containsRepo(s.cfg.Repos, n.Repo.FullName) {
+			continue
+		}
+		notifs = append(notifs, notif)
+	}
+
+	return notifs, nil
+}
+
+func containsRepo(repos []string, repo string) bool {
+	for _, r := range repos {
+		if r == repo {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *GitHubService) GetCached() []models.GitHubNotification {

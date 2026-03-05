@@ -11,8 +11,11 @@ import (
 	"github.com/todogpt/daily-briefing/internal/services"
 )
 
-func testHub() *services.Hub {
-	return services.NewHub(config.DefaultConfig())
+func testHub(t *testing.T) *services.Hub {
+	t.Helper()
+	cfg := config.DefaultConfig()
+	cfg.Server.DataDir = t.TempDir()
+	return services.NewHub(cfg)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -153,7 +156,7 @@ func TestTruncate(t *testing.T) {
 // ── Model construction ────────────────────────────────────────────────────────
 
 func TestNewModel(t *testing.T) {
-	hub := testHub()
+	hub := testHub(t)
 	m := newModel(hub)
 	if !m.loading {
 		t.Error("expected loading=true on new model")
@@ -164,7 +167,7 @@ func TestNewModel(t *testing.T) {
 }
 
 func TestInitReturnsCmds(t *testing.T) {
-	hub := testHub()
+	hub := testHub(t)
 	m := newModel(hub)
 	cmd := m.Init()
 	if cmd == nil {
@@ -417,7 +420,7 @@ func TestKeyTodoUpAtZero(t *testing.T) {
 // ── Key: mark done ────────────────────────────────────────────────────────────
 
 func TestKeyTodoMarkDoneSpace(t *testing.T) {
-	hub := testHub()
+	hub := testHub(t)
 	// seed the hub's todo service with our test todos
 	hub.Todos.Add(models.TodoItem{ID: "t1", Title: "Task 1", Status: models.TodoPending})
 	hub.Todos.Add(models.TodoItem{ID: "t2", Title: "Task 2", Status: models.TodoPending})
@@ -437,7 +440,7 @@ func TestKeyTodoMarkDoneSpace(t *testing.T) {
 }
 
 func TestKeyTodoMarkDoneEnter(t *testing.T) {
-	hub := testHub()
+	hub := testHub(t)
 	hub.Todos.Add(models.TodoItem{ID: "x1", Title: "Task A", Status: models.TodoPending})
 
 	m := loadedModel()
@@ -453,7 +456,7 @@ func TestKeyTodoMarkDoneEnter(t *testing.T) {
 }
 
 func TestKeyTodoMarkDoneAdjustsCursor(t *testing.T) {
-	hub := testHub()
+	hub := testHub(t)
 	hub.Todos.Add(models.TodoItem{ID: "a", Title: "A", Status: models.TodoPending})
 	hub.Todos.Add(models.TodoItem{ID: "b", Title: "B", Status: models.TodoPending})
 
@@ -936,7 +939,7 @@ func TestUpdateUnknownMsg(t *testing.T) {
 // ── doFetch execution ─────────────────────────────────────────────────────────
 
 func TestDoFetch(t *testing.T) {
-	hub := testHub()
+	hub := testHub(t)
 	cmd := doFetch(hub)
 	if cmd == nil {
 		t.Fatal("doFetch should return a non-nil Cmd")
@@ -980,5 +983,320 @@ func TestScheduleTick(t *testing.T) {
 	cmd := scheduleTick()
 	if cmd == nil {
 		t.Error("scheduleTick should return a non-nil Cmd")
+	}
+}
+
+// ── Key: new todo (n) ─────────────────────────────────────────────────────────
+
+func TestKeyNEntersInputMode(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secTodos
+	m2 := m.applyKey("n")
+	if !m2.inputMode {
+		t.Error("expected inputMode=true after 'n'")
+	}
+	if m2.inputText != "" {
+		t.Error("expected empty inputText on entry")
+	}
+}
+
+func TestKeyNOnlyWorksOnTodosTab(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secNews
+	m2 := m.applyKey("n")
+	if m2.inputMode {
+		t.Error("'n' should not enter input mode on non-todos tab")
+	}
+}
+
+func TestInputModeTyping(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secTodos
+	m.inputMode = true
+	m.inputText = ""
+	for _, ch := range "hello" {
+		m = m.applyInputKey(string(ch))
+	}
+	if m.inputText != "hello" {
+		t.Errorf("expected inputText='hello', got %q", m.inputText)
+	}
+}
+
+func TestInputModeBackspace(t *testing.T) {
+	m := loadedModel()
+	m.inputMode = true
+	m.inputText = "abc"
+	m2 := m.applyInputKey("backspace")
+	if m2.inputText != "ab" {
+		t.Errorf("expected 'ab' after backspace, got %q", m2.inputText)
+	}
+}
+
+func TestInputModeBackspaceEmpty(t *testing.T) {
+	m := loadedModel()
+	m.inputMode = true
+	m.inputText = ""
+	m2 := m.applyInputKey("backspace")
+	if m2.inputText != "" {
+		t.Error("backspace on empty should not panic")
+	}
+}
+
+func TestInputModeEscCancels(t *testing.T) {
+	m := loadedModel()
+	m.inputMode = true
+	m.inputText = "unfinished"
+	m2 := m.applyInputKey("esc")
+	if m2.inputMode {
+		t.Error("expected inputMode=false after esc")
+	}
+	if m2.inputText != "" {
+		t.Error("expected inputText cleared after esc")
+	}
+}
+
+func TestInputModeEnterCreatesTodo(t *testing.T) {
+	hub := testHub(t)
+	m := loadedModel()
+	m.hub = hub
+	m.activeTab = secTodos
+	m.inputMode = true
+	m.inputText = "My new task"
+
+	m2 := m.applyInputKey("enter")
+	if m2.inputMode {
+		t.Error("expected inputMode=false after enter")
+	}
+	if m2.inputText != "" {
+		t.Error("expected inputText cleared after enter")
+	}
+	found := false
+	for _, todo := range hub.Todos.List() {
+		if todo.Title == "My new task" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected new todo to be added to hub")
+	}
+}
+
+func TestInputModeEnterEmptyDoesNotCreate(t *testing.T) {
+	hub := testHub(t)
+	before := len(hub.Todos.List())
+	m := loadedModel()
+	m.hub = hub
+	m.inputMode = true
+	m.inputText = ""
+	m.applyInputKey("enter")
+	if len(hub.Todos.List()) != before {
+		t.Error("empty input should not create a todo")
+	}
+}
+
+func TestInputModeEnterNoHub(t *testing.T) {
+	m := loadedModel()
+	m.hub = nil
+	m.inputMode = true
+	m.inputText = "task"
+	m2 := m.applyInputKey("enter")
+	// Should not panic
+	if m2.inputMode {
+		t.Error("expected inputMode=false even with nil hub")
+	}
+}
+
+func TestInputModeMultiRuneKeyIgnored(t *testing.T) {
+	m := loadedModel()
+	m.inputMode = true
+	m.inputText = "x"
+	m2 := m.applyInputKey("ctrl+a") // multi-char key — should be ignored
+	if m2.inputText != "x" {
+		t.Errorf("multi-rune key should be ignored, got %q", m2.inputText)
+	}
+}
+
+func TestUpdateKeyInInputMode(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secTodos
+	m.inputMode = true
+	m.inputText = ""
+	// 'q' in input mode should NOT quit — it should type 'q'
+	result, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	m2 := result.(model)
+	if cmd != nil {
+		t.Error("'q' in input mode should not produce quit cmd")
+	}
+	if m2.inputText != "q" {
+		t.Errorf("expected inputText='q', got %q", m2.inputText)
+	}
+}
+
+func TestUpdateCtrlCInInputModeQuits(t *testing.T) {
+	m := loadedModel()
+	m.inputMode = true
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if cmd == nil {
+		t.Error("ctrl+c should still quit even in input mode")
+	}
+}
+
+// ── Key: delete todo (d) ──────────────────────────────────────────────────────
+
+func TestKeyDeleteTodo(t *testing.T) {
+	hub := testHub(t)
+	hub.Todos.Add(models.TodoItem{ID: "del1", Title: "Delete me", Status: models.TodoPending})
+	hub.Todos.Add(models.TodoItem{ID: "del2", Title: "Keep me", Status: models.TodoPending})
+
+	m := loadedModel()
+	m.hub = hub
+	m.briefing.Todos = hub.Todos.List()
+	m.activeTab = secTodos
+	m.selectedTodo = 0
+
+	m2 := m.applyKey("d")
+	if countPending(m2.briefing.Todos) != 1 {
+		t.Errorf("expected 1 pending after delete, got %d", countPending(m2.briefing.Todos))
+	}
+}
+
+func TestKeyDeleteNoHub(t *testing.T) {
+	m := loadedModel()
+	m.hub = nil
+	m.activeTab = secTodos
+	m2 := m.applyKey("d")
+	_ = m2 // should not panic
+}
+
+func TestKeyDeleteNotTodosTab(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secNews
+	m2 := m.applyKey("d")
+	if m2.activeTab != secNews {
+		t.Error("delete on non-todos tab should not change tab")
+	}
+}
+
+func TestKeyDeleteClampsSelection(t *testing.T) {
+	hub := testHub(t)
+	hub.Todos.Add(models.TodoItem{ID: "a", Title: "A", Status: models.TodoPending})
+	hub.Todos.Add(models.TodoItem{ID: "b", Title: "B", Status: models.TodoPending})
+
+	m := loadedModel()
+	m.hub = hub
+	m.briefing.Todos = hub.Todos.List()
+	m.activeTab = secTodos
+	m.selectedTodo = 1
+
+	m2 := m.applyKey("d")
+	if m2.selectedTodo != 0 {
+		t.Errorf("cursor should clamp to 0 after deleting last item, got %d", m2.selectedTodo)
+	}
+}
+
+// ── Key: in-progress toggle (i) ───────────────────────────────────────────────
+
+func TestKeyInProgressToggle(t *testing.T) {
+	hub := testHub(t)
+	hub.Todos.Add(models.TodoItem{ID: "ip1", Title: "Task", Status: models.TodoPending})
+
+	m := loadedModel()
+	m.hub = hub
+	m.briefing.Todos = hub.Todos.List()
+	m.activeTab = secTodos
+	m.selectedTodo = 0
+
+	m2 := m.applyKey("i")
+	items := m2.briefing.Todos
+	var found *models.TodoItem
+	for i := range items {
+		if items[i].ID == "ip1" {
+			found = &items[i]
+		}
+	}
+	if found == nil {
+		t.Fatal("todo not found after toggle")
+	}
+	if found.Status != models.TodoInProgress {
+		t.Errorf("expected TodoInProgress after first toggle, got %v", found.Status)
+	}
+
+	// Toggle back to pending
+	m3 := m2.applyKey("i")
+	items3 := m3.briefing.Todos
+	for i := range items3 {
+		if items3[i].ID == "ip1" && items3[i].Status != models.TodoPending {
+			t.Errorf("expected TodoPending after second toggle, got %v", items3[i].Status)
+		}
+	}
+}
+
+func TestKeyInProgressNoHub(t *testing.T) {
+	m := loadedModel()
+	m.hub = nil
+	m.activeTab = secTodos
+	m2 := m.applyKey("i")
+	_ = m2
+}
+
+// ── Render: input mode ────────────────────────────────────────────────────────
+
+func TestRenderTodosInputMode(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secTodos
+	m.inputMode = true
+	m.inputText = "Buy bread"
+	out := m.renderTodos()
+	if !strings.Contains(out, "Buy bread") {
+		t.Errorf("expected input text in render, got: %q", out)
+	}
+	if !strings.Contains(out, "New todo") {
+		t.Errorf("expected 'New todo' header, got: %q", out)
+	}
+}
+
+func TestRenderTodosInputModeEmpty(t *testing.T) {
+	m := loadedModel()
+	m.briefing.Todos = nil
+	m.inputMode = true
+	out := m.renderTodos()
+	// Should show prompt even when no todos
+	if !strings.Contains(out, "New todo") {
+		t.Errorf("expected prompt even with empty todos, got: %q", out)
+	}
+}
+
+func TestRenderTodosInProgressMarker(t *testing.T) {
+	m := loadedModel()
+	m.briefing.Todos = []models.TodoItem{
+		{ID: "x", Title: "Working on it", Status: models.TodoInProgress, Priority: models.PriorityMedium, Source: "manual"},
+	}
+	out := m.renderTodos()
+	if !strings.Contains(out, "●") {
+		t.Errorf("expected in-progress marker ●, got: %q", out)
+	}
+}
+
+func TestViewStatusBarInputMode(t *testing.T) {
+	m := loadedModel()
+	m.inputMode = true
+	sb := m.viewStatusBar()
+	if !strings.Contains(sb, "confirm") {
+		t.Errorf("expected 'confirm' in input mode status bar, got: %q", sb)
+	}
+	if strings.Contains(sb, "quit") {
+		t.Errorf("should not show 'quit' in input mode status bar")
+	}
+}
+
+func TestViewStatusBarTodosActions(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secTodos
+	sb := m.viewStatusBar()
+	if !strings.Contains(sb, "new") {
+		t.Errorf("expected 'new' in todos status bar, got: %q", sb)
+	}
+	if !strings.Contains(sb, "delete") {
+		t.Errorf("expected 'delete' in todos status bar, got: %q", sb)
 	}
 }
