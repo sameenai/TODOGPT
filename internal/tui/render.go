@@ -159,12 +159,26 @@ func (m model) renderTodos() string {
 		sb.WriteString(fmt.Sprintf("  > %s%s\n\n", m.inputText, cursorStyle.Render("█")))
 	}
 
-	pending := filterPending(m.briefing.Todos)
-	if len(pending) == 0 && !m.inputMode {
+	// Filter prompt when in filter mode
+	if m.filterMode {
+		sb.WriteString(titleStyle.Render("  Filter todos") + "\n\n")
+		sb.WriteString(fmt.Sprintf("  / %s%s\n\n", m.filterText, cursorStyle.Render("█")))
+	}
+
+	pending := sortAndFilterTodos(m.briefing.Todos, m.filterText, m.sortMode)
+	if len(pending) == 0 && !m.inputMode && !m.filterMode {
+		if m.filterText != "" {
+			return dimStyle.Render(fmt.Sprintf("  No todos match %q. Press x to clear filter.", m.filterText)) + "\n"
+		}
 		return successStyle.Render("  All done! No pending action items.") + "\n"
 	}
 	if len(pending) > 0 {
-		sb.WriteString(titleStyle.Render(fmt.Sprintf("  %d action items", len(pending))) + "\n\n")
+		header := fmt.Sprintf("  %d action items", len(pending))
+		if m.filterText != "" {
+			header += fmt.Sprintf("  (filtered: %q)", m.filterText)
+		}
+		header += fmt.Sprintf("  [sort: %s]", sortModeNames[m.sortMode])
+		sb.WriteString(titleStyle.Render(header) + "\n\n")
 	}
 	for i, t := range pending {
 		var priorityStr string
@@ -192,8 +206,8 @@ func (m model) renderTodos() string {
 		sb.WriteString(fmt.Sprintf("  %s%s  %s%s\n", cursor, priorityStr, title, statusMark))
 		sb.WriteString(fmt.Sprintf("             %s\n\n", dimStyle.Render(t.Source)))
 	}
-	if !m.inputMode {
-		sb.WriteString(dimStyle.Render("  space/enter: done  i: in-progress  d: delete  n: new") + "\n")
+	if !m.inputMode && !m.filterMode {
+		sb.WriteString(dimStyle.Render("  space/enter: done  i: in-progress  d: delete  n: new  s: sort  /: filter") + "\n")
 	}
 	return sb.String()
 }

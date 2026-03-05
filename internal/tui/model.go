@@ -90,6 +90,10 @@ type model struct {
 	// Todo input mode (n key opens inline new-todo prompt)
 	inputMode bool
 	inputText string
+	// Todo sort/filter
+	sortMode   int
+	filterText string
+	filterMode bool
 	// Pomodoro timer
 	pomodoroCfg     config.PomodoroConfig
 	pomodoroRunning bool
@@ -183,6 +187,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m.applyInputKey(key), nil
 		}
+		// In filter mode, route keys to filter handler
+		if m.filterMode {
+			if key == "ctrl+c" {
+				return m, tea.Quit
+			}
+			return m.applyFilterKey(key), nil
+		}
 		if key == "q" || key == "ctrl+c" {
 			return m, tea.Quit
 		}
@@ -226,7 +237,7 @@ func (m model) applyKey(key string) model {
 
 	case "down", "j":
 		if m.activeTab == secTodos && m.briefing != nil {
-			n := countPending(m.briefing.Todos)
+			n := len(sortAndFilterTodos(m.briefing.Todos, m.filterText, m.sortMode))
 			if m.selectedTodo < n-1 {
 				m.selectedTodo++
 			}
@@ -236,11 +247,11 @@ func (m model) applyKey(key string) model {
 
 	case " ", "enter":
 		if m.activeTab == secTodos && m.briefing != nil && m.hub != nil {
-			pending := filterPending(m.briefing.Todos)
+			pending := sortAndFilterTodos(m.briefing.Todos, m.filterText, m.sortMode)
 			if m.selectedTodo < len(pending) {
 				m.hub.Todos.Complete(pending[m.selectedTodo].ID)
 				m.briefing.Todos = m.hub.Todos.List()
-				n := countPending(m.briefing.Todos)
+				n := len(sortAndFilterTodos(m.briefing.Todos, m.filterText, m.sortMode))
 				if m.selectedTodo >= n && m.selectedTodo > 0 {
 					m.selectedTodo = n - 1
 				}
@@ -255,11 +266,11 @@ func (m model) applyKey(key string) model {
 
 	case "d":
 		if m.activeTab == secTodos && m.briefing != nil && m.hub != nil {
-			pending := filterPending(m.briefing.Todos)
+			pending := sortAndFilterTodos(m.briefing.Todos, m.filterText, m.sortMode)
 			if m.selectedTodo < len(pending) {
 				m.hub.Todos.Delete(pending[m.selectedTodo].ID)
 				m.briefing.Todos = m.hub.Todos.List()
-				n := countPending(m.briefing.Todos)
+				n := len(sortAndFilterTodos(m.briefing.Todos, m.filterText, m.sortMode))
 				if m.selectedTodo >= n && m.selectedTodo > 0 {
 					m.selectedTodo = n - 1
 				}
@@ -268,7 +279,7 @@ func (m model) applyKey(key string) model {
 
 	case "i":
 		if m.activeTab == secTodos && m.briefing != nil && m.hub != nil {
-			pending := filterPending(m.briefing.Todos)
+			pending := sortAndFilterTodos(m.briefing.Todos, m.filterText, m.sortMode)
 			if m.selectedTodo < len(pending) {
 				todo := pending[m.selectedTodo]
 				if todo.Status == models.TodoInProgress {
@@ -282,6 +293,23 @@ func (m model) applyKey(key string) model {
 				}
 				m.briefing.Todos = m.hub.Todos.List()
 			}
+		}
+
+	case "s":
+		if m.activeTab == secTodos {
+			m.sortMode = (m.sortMode + 1) % numSortModes
+			m.selectedTodo = 0
+		}
+
+	case "/":
+		if m.activeTab == secTodos {
+			m.filterMode = true
+		}
+
+	case "x":
+		if m.activeTab == secTodos {
+			m.filterText = ""
+			m.selectedTodo = 0
 		}
 
 	case "r":
@@ -323,6 +351,26 @@ func (m model) applyInputKey(key string) model {
 		// Accept printable single-rune keys
 		if len(key) == 1 {
 			m.inputText += key
+		}
+	}
+	return m
+}
+
+// applyFilterKey handles keystrokes when the todo filter prompt is open.
+func (m model) applyFilterKey(key string) model {
+	switch key {
+	case "esc", "enter":
+		m.filterMode = false
+		m.selectedTodo = 0
+	case "backspace":
+		if len(m.filterText) > 0 {
+			m.filterText = m.filterText[:len(m.filterText)-1]
+			m.selectedTodo = 0
+		}
+	default:
+		if len(key) == 1 {
+			m.filterText += key
+			m.selectedTodo = 0
 		}
 	}
 	return m
@@ -447,12 +495,19 @@ func (m model) viewStatusBar() string {
 	var keys []string
 	if m.inputMode {
 		keys = append(keys, "type title", "enter confirm", "esc cancel")
+	} else if m.filterMode {
+		keys = append(keys, "type to filter", "enter/esc confirm", "backspace delete")
 	} else if m.activeTab == secTodos {
-		keys = append(keys, "↑/↓ select", "space/enter done", "i in-progress", "d delete", "n new")
+		sortLabel := fmt.Sprintf("s sort(%s)", sortModeNames[m.sortMode])
+		filterLabel := "/ filter"
+		if m.filterText != "" {
+			filterLabel = fmt.Sprintf("/ filter(%s)  x clear", m.filterText)
+		}
+		keys = append(keys, "↑/↓ select", "space/enter done", "i in-progress", "d delete", "n new", sortLabel, filterLabel)
 	} else {
 		keys = append(keys, "↑/↓ scroll")
 	}
-	if !m.inputMode {
+	if !m.inputMode && !m.filterMode {
 		keys = append(keys, "←/→ tab", "1-7 jump", "r refresh", "q quit")
 	}
 	left := "  " + strings.Join(keys, "  ·  ")

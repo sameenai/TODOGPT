@@ -1476,3 +1476,213 @@ func TestViewStatusBarTodosActions(t *testing.T) {
 	if !strings.Contains(sb, "delete") {
 		t.Errorf("expected 'delete' in todos status bar, got: %q", sb)	}
 }
+
+// ── Sort/Filter tests ──────────────────────────────────────────────────────────
+
+func TestSortModeKeysCycleThroughModes(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secTodos
+	if m.sortMode != sortByPriority {
+		t.Fatalf("expected initial sort mode %d, got %d", sortByPriority, m.sortMode)
+	}
+	m = m.applyKey("s")
+	if m.sortMode != sortByStatus {
+		t.Errorf("expected sortByStatus after first s, got %d", m.sortMode)
+	}
+	m = m.applyKey("s")
+	if m.sortMode != sortByTitle {
+		t.Errorf("expected sortByTitle after second s, got %d", m.sortMode)
+	}
+	m = m.applyKey("s")
+	if m.sortMode != sortByPriority {
+		t.Errorf("expected sortByPriority after wrapping, got %d", m.sortMode)
+	}
+}
+
+func TestSortKeyIgnoredOutsideTodosTab(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secNews
+	m = m.applyKey("s")
+	if m.sortMode != sortByPriority {
+		t.Errorf("expected sort mode unchanged outside todos tab, got %d", m.sortMode)
+	}
+}
+
+func TestFilterKeyEntersFilterMode(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secTodos
+	m = m.applyKey("/")
+	if !m.filterMode {
+		t.Error("expected filterMode=true after pressing /")
+	}
+}
+
+func TestFilterKeyIgnoredOutsideTodosTab(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secNews
+	m = m.applyKey("/")
+	if m.filterMode {
+		t.Error("expected filterMode=false outside todos tab")
+	}
+}
+
+func TestFilterInputBuildsText(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secTodos
+	m.filterMode = true
+	m = m.applyFilterKey("f")
+	m = m.applyFilterKey("o")
+	m = m.applyFilterKey("o")
+	if m.filterText != "foo" {
+		t.Errorf("expected filterText 'foo', got %q", m.filterText)
+	}
+}
+
+func TestFilterInputBackspace(t *testing.T) {
+	m := loadedModel()
+	m.filterMode = true
+	m.filterText = "abc"
+	m = m.applyFilterKey("backspace")
+	if m.filterText != "ab" {
+		t.Errorf("expected 'ab' after backspace, got %q", m.filterText)
+	}
+}
+
+func TestFilterInputEscExitsMode(t *testing.T) {
+	m := loadedModel()
+	m.filterMode = true
+	m.filterText = "hello"
+	m = m.applyFilterKey("esc")
+	if m.filterMode {
+		t.Error("expected filterMode=false after esc")
+	}
+	if m.filterText != "hello" {
+		t.Errorf("expected filterText preserved after esc, got %q", m.filterText)
+	}
+}
+
+func TestFilterInputEnterConfirms(t *testing.T) {
+	m := loadedModel()
+	m.filterMode = true
+	m.filterText = "work"
+	m = m.applyFilterKey("enter")
+	if m.filterMode {
+		t.Error("expected filterMode=false after enter")
+	}
+	if m.filterText != "work" {
+		t.Errorf("expected filterText preserved, got %q", m.filterText)
+	}
+}
+
+func TestXKeyClearsFilter(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secTodos
+	m.filterText = "something"
+	m = m.applyKey("x")
+	if m.filterText != "" {
+		t.Errorf("expected empty filterText after x, got %q", m.filterText)
+	}
+}
+
+func TestSortAndFilterTodosFilterByTitle(t *testing.T) {
+	todos := []models.TodoItem{
+		{ID: "1", Title: "Buy milk", Status: models.TodoPending, Priority: models.PriorityMedium},
+		{ID: "2", Title: "Write tests", Status: models.TodoPending, Priority: models.PriorityHigh},
+		{ID: "3", Title: "Buy coffee", Status: models.TodoPending, Priority: models.PriorityLow},
+	}
+	result := sortAndFilterTodos(todos, "buy", sortByPriority)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 results for filter 'buy', got %d", len(result))
+	}
+}
+
+func TestSortAndFilterTodosSortByTitle(t *testing.T) {
+	todos := []models.TodoItem{
+		{ID: "1", Title: "Zebra task", Status: models.TodoPending, Priority: models.PriorityMedium},
+		{ID: "2", Title: "Alpha task", Status: models.TodoPending, Priority: models.PriorityHigh},
+		{ID: "3", Title: "Mango task", Status: models.TodoPending, Priority: models.PriorityLow},
+	}
+	result := sortAndFilterTodos(todos, "", sortByTitle)
+	if result[0].Title != "Alpha task" || result[2].Title != "Zebra task" {
+		t.Errorf("expected alphabetical order, got %v, %v, %v", result[0].Title, result[1].Title, result[2].Title)
+	}
+}
+
+func TestSortAndFilterTodosSortByStatus(t *testing.T) {
+	todos := []models.TodoItem{
+		{ID: "1", Title: "Pending task", Status: models.TodoPending},
+		{ID: "2", Title: "In progress", Status: models.TodoInProgress},
+	}
+	result := sortAndFilterTodos(todos, "", sortByStatus)
+	if result[0].Status != models.TodoInProgress {
+		t.Errorf("expected in-progress first, got status %d", result[0].Status)
+	}
+}
+
+func TestSortAndFilterTodosExcludesDone(t *testing.T) {
+	todos := []models.TodoItem{
+		{ID: "1", Title: "Done task", Status: models.TodoDone},
+		{ID: "2", Title: "Pending task", Status: models.TodoPending},
+	}
+	result := sortAndFilterTodos(todos, "", sortByPriority)
+	if len(result) != 1 || result[0].ID != "2" {
+		t.Errorf("expected only pending task, got %+v", result)
+	}
+}
+
+func TestRenderTodosShowsSortLabel(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secTodos
+	m.sortMode = sortByTitle
+	rendered := m.renderTodos()
+	if !strings.Contains(rendered, "sort: title") {
+		t.Errorf("expected 'sort: title' in render, got: %q", rendered)
+	}
+}
+
+func TestRenderTodosShowsFilterLabel(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secTodos
+	m.filterText = "testfilter"
+	rendered := m.renderTodos()
+	if !strings.Contains(rendered, "testfilter") {
+		t.Errorf("expected filterText in render, got: %q", rendered)
+	}
+}
+
+func TestStatusBarShowsSortMode(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secTodos
+	m.sortMode = sortByStatus
+	sb := m.viewStatusBar()
+	if !strings.Contains(sb, "status") {
+		t.Errorf("expected 'status' sort mode in status bar, got: %q", sb)
+	}
+}
+
+func TestStatusBarShowsFilterModePrompt(t *testing.T) {
+	m := loadedModel()
+	m.filterMode = true
+	sb := m.viewStatusBar()
+	if !strings.Contains(sb, "filter") {
+		t.Errorf("expected 'filter' in filter-mode status bar, got: %q", sb)
+	}
+	if strings.Contains(sb, "quit") {
+		t.Error("should not show 'quit' in filter mode status bar")
+	}
+}
+
+func TestDownKeyBoundsWithFilter(t *testing.T) {
+	m := loadedModel()
+	m.activeTab = secTodos
+	// Filter to only one result
+	m.filterText = m.briefing.Todos[0].Title
+	// Pressing down should not exceed filtered count
+	m = m.applyKey("down")
+	m = m.applyKey("down")
+	m = m.applyKey("down")
+	filtered := sortAndFilterTodos(m.briefing.Todos, m.filterText, m.sortMode)
+	if m.selectedTodo >= len(filtered) {
+		t.Errorf("selectedTodo %d out of bounds for filtered list len %d", m.selectedTodo, len(filtered))
+	}
+}
