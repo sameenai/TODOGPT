@@ -57,6 +57,22 @@ export function Dashboard({ initialBriefing }: Props) {
     }
   }, [initialBriefing]);
 
+  // Handle OAuth redirect: ?google=connected|denied|error
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const googleParam = params.get('google');
+    if (googleParam) {
+      // Remove query param from URL without triggering a reload
+      const url = new URL(window.location.href);
+      url.searchParams.delete('google');
+      window.history.replaceState({}, '', url.toString());
+      // Open settings so user can see connection status
+      if (googleParam === 'connected' || googleParam === 'denied' || googleParam === 'error') {
+        setSettingsOpen(true);
+      }
+    }
+  }, []);
+
   if (!briefing) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">

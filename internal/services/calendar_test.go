@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/todogpt/daily-briefing/internal/config"
+	"github.com/todogpt/daily-briefing/internal/models"
 )
 
 func TestNewCalendarService(t *testing.T) {
@@ -390,5 +391,348 @@ func TestUnescapeICalText(t *testing.T) {
 		if got != c.want {
 			t.Errorf("unescapeICalText(%q) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+// ── Google Calendar API tests ──────────────────────────────────────────────────
+
+func gcalResponse(items string) string {
+	return `{"kind":"calendar#events","items":[` + items + `]}`
+}
+
+func gcalItem(id, summary, start, end string) string {
+	return fmt.Sprintf(`{"id":%q,"summary":%q,"start":{"dateTime":%q},"end":{"dateTime":%q},"hangoutLink":"https://meet.google.com/abc"}`, id, summary, start, end)
+}
+
+func TestFetchGoogleCalendarSuccess(t *testing.T) {
+	now := time.Now()
+	start := now.Add(time.Hour).UTC().Format(time.RFC3339)
+	end := now.Add(2 * time.Hour).UTC().Format(time.RFC3339)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, gcalResponse(gcalItem("evt1", "Team Standup", start, end)))
+	}))
+	defer srv.Close()
+
+	orig := googleCalendarBaseURL
+	googleCalendarBaseURL = srv.URL
+	defer func() { googleCalendarBaseURL = orig }()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	// Inject a valid token so auth.Client() returns a real client
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	svc := NewCalendarServiceWithAuth(config.GoogleConfig{}, auth)
+	events, err := svc.fetchGoogleCalendar(auth.Client())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Title != "Team Standup" {
+		t.Errorf("expected title 'Team Standup', got %q", events[0].Title)
+	}
+	if events[0].MeetingURL == "" {
+		t.Error("expected MeetingURL to be set")
+	}
+}
+
+func TestFetchGoogleCalendarAllDay(t *testing.T) {
+	today := time.Now().Format("2006-01-02")
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	itemJSON := fmt.Sprintf(`{"id":"ad1","summary":"All Day","start":{"date":%q},"end":{"date":%q}}`, today, tomorrow)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, gcalResponse(itemJSON))
+	}))
+	defer srv.Close()
+
+	orig := googleCalendarBaseURL
+	googleCalendarBaseURL = srv.URL
+	defer func() { googleCalendarBaseURL = orig }()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	events, err := svc_calendar(auth).fetchGoogleCalendar(auth.Client())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) == 0 {
+		t.Fatal("expected at least 1 event")
+	}
+	if !events[0].AllDay {
+		t.Error("expected AllDay=true")
+	}
+}
+
+func TestFetchGoogleCalendarAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"error":{"code":401,"message":"Unauthorized"}}`)
+	}))
+	defer srv.Close()
+
+	orig := googleCalendarBaseURL
+	googleCalendarBaseURL = srv.URL
+	defer func() { googleCalendarBaseURL = orig }()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	_, err := svc_calendar(auth).fetchGoogleCalendar(auth.Client())
+	if err == nil {
+		t.Error("expected error for API error response")
+	}
+}
+
+func TestFetchGoogleCalendarNilClient(t *testing.T) {
+	svc := NewCalendarService(config.GoogleConfig{})
+	_, err := svc.fetchGoogleCalendar(nil)
+	if err == nil {
+		t.Error("expected error for nil client")
+	}
+}
+
+func TestFetchGoogleCalendarInvalidJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "not-json")
+	}))
+	defer srv.Close()
+
+	orig := googleCalendarBaseURL
+	googleCalendarBaseURL = srv.URL
+	defer func() { googleCalendarBaseURL = orig }()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	_, err := svc_calendar(auth).fetchGoogleCalendar(auth.Client())
+	if err == nil {
+		t.Error("expected error for invalid JSON")
+	}
+}
+
+func TestCalendarFetchPrefersGoogleAPI(t *testing.T) {
+	now := time.Now()
+	start := now.Add(time.Hour).UTC().Format(time.RFC3339)
+	end := now.Add(2 * time.Hour).UTC().Format(time.RFC3339)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, gcalResponse(gcalItem("e1", "Google Event", start, end)))
+	}))
+	defer srv.Close()
+
+	orig := googleCalendarBaseURL
+	googleCalendarBaseURL = srv.URL
+	defer func() { googleCalendarBaseURL = orig }()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	svc := NewCalendarServiceWithAuth(config.GoogleConfig{}, auth)
+	events, err := svc.Fetch()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) == 0 {
+		t.Fatal("expected events from Google Calendar API")
+	}
+	if events[0].Source != "google" {
+		t.Errorf("expected source='google', got %q", events[0].Source)
+	}
+}
+
+func TestFetchGoogleCalendarSkipsZeroStart(t *testing.T) {
+	// Item with no start date/dateTime — should be skipped
+	itemJSON := `{"id":"bad","summary":"No Start","start":{},"end":{}}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, gcalResponse(itemJSON))
+	}))
+	defer srv.Close()
+
+	orig := googleCalendarBaseURL
+	googleCalendarBaseURL = srv.URL
+	defer func() { googleCalendarBaseURL = orig }()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	events, err := svc_calendar(auth).fetchGoogleCalendar(auth.Client())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) != 0 {
+		t.Errorf("expected 0 events (zero start skipped), got %d", len(events))
+	}
+}
+
+func TestFetchGoogleCalendarWithAttendees(t *testing.T) {
+	now := time.Now()
+	start := now.Add(time.Hour).UTC().Format(time.RFC3339)
+	end := now.Add(2 * time.Hour).UTC().Format(time.RFC3339)
+	itemJSON := fmt.Sprintf(
+		`{"id":"att","summary":"Meeting","start":{"dateTime":%q},"end":{"dateTime":%q},"attendees":[{"displayName":"Alice","email":"alice@example.com"},{"email":"bob@example.com"}]}`,
+		start, end,
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, gcalResponse(itemJSON))
+	}))
+	defer srv.Close()
+
+	orig := googleCalendarBaseURL
+	googleCalendarBaseURL = srv.URL
+	defer func() { googleCalendarBaseURL = orig }()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	events, err := svc_calendar(auth).fetchGoogleCalendar(auth.Client())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) == 0 {
+		t.Fatal("expected events")
+	}
+	if len(events[0].Attendees) != 2 {
+		t.Errorf("expected 2 attendees, got %d", len(events[0].Attendees))
+	}
+	if events[0].Attendees[0] != "Alice" {
+		t.Errorf("expected first attendee 'Alice', got %q", events[0].Attendees[0])
+	}
+	if events[0].Attendees[1] != "bob@example.com" {
+		t.Errorf("expected second attendee 'bob@example.com', got %q", events[0].Attendees[1])
+	}
+}
+
+// svc_calendar creates a CalendarService with the given auth.
+func svc_calendar(auth *GoogleAuthService) *CalendarService {
+	return NewCalendarServiceWithAuth(config.GoogleConfig{}, auth)
+}
+
+func TestCalendarFetchGoogleErrorNoCache(t *testing.T) {
+	// Google Calendar returns an error; no cache → falls through to iCal path → empty (no iCal URL)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"error":{"code":500,"message":"Server Error"}}`)
+	}))
+	defer srv.Close()
+
+	orig := googleCalendarBaseURL
+	googleCalendarBaseURL = srv.URL
+	defer func() { googleCalendarBaseURL = orig }()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	svc := NewCalendarServiceWithAuth(config.GoogleConfig{}, auth)
+	events, err := svc.Fetch()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) != 0 {
+		t.Errorf("expected 0 events (Google error, no iCal URL), got %d", len(events))
+	}
+}
+
+func TestCalendarFetchGoogleErrorWithCache(t *testing.T) {
+	// Google Calendar returns an error; cache is populated → returns cache
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"error":{"code":500,"message":"Server Error"}}`)
+	}))
+	defer srv.Close()
+
+	orig := googleCalendarBaseURL
+	googleCalendarBaseURL = srv.URL
+	defer func() { googleCalendarBaseURL = orig }()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	svc := NewCalendarServiceWithAuth(config.GoogleConfig{}, auth)
+	// Populate cache manually
+	svc.mu.Lock()
+	svc.cache = []models.CalendarEvent{{ID: "cached1", Title: "Cached Event"}}
+	svc.mu.Unlock()
+
+	events, err := svc.Fetch()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) == 0 {
+		t.Error("expected cached events when Google Calendar fails")
+	}
+}
+
+func TestParseICalEventWithDescription(t *testing.T) {
+	now := time.Now().UTC()
+	start := now.Add(time.Hour)
+	end := start.Add(time.Hour)
+	dtStart := start.Format("20060102T150405Z")
+	dtEnd := end.Format("20060102T150405Z")
+
+	feed := "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:desc-test\nSUMMARY:Described Event\nDESCRIPTION:A test description\nDTSTART:" + dtStart + "\nDTEND:" + dtEnd + "\nEND:VEVENT\nEND:VCALENDAR"
+	events, err := parseICalTodayEvents(strings.NewReader(feed))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) == 0 {
+		t.Fatal("expected at least one event")
+	}
+	if events[0].Description != "A test description" {
+		t.Errorf("expected description 'A test description', got %q", events[0].Description)
+	}
+}
+
+func TestParseICalDateTimeInvalidDate(t *testing.T) {
+	params := map[string]string{"VALUE": "DATE"}
+	_, ok := parseICalDateTime("not-a-date", params)
+	if ok {
+		t.Error("expected false for invalid DATE value")
+	}
+}
+
+func TestParseICalDateTimeInvalidUTC(t *testing.T) {
+	params := map[string]string{}
+	// Ends with Z but is not valid UTC datetime
+	_, ok := parseICalDateTime("BADVALUEZ", params)
+	if ok {
+		t.Error("expected false for invalid UTC datetime value")
 	}
 }

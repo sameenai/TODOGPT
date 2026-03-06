@@ -2,16 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import type { ConfigResponse } from '@/lib/types';
-import { fetchConfig, saveConfig } from '@/lib/api';
+import { fetchConfig, saveConfig, fetchAuthStatus, googleAuthURL, disconnectGoogle } from '@/lib/api';
+import type { AuthStatus } from '@/lib/api';
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
-type Section = 'weather' | 'news' | 'calendar' | 'slack' | 'email' | 'github' | 'jira' | 'notion' | 'ai' | 'server' | 'pomodoro';
+type Section = 'google' | 'weather' | 'news' | 'calendar' | 'slack' | 'email' | 'github' | 'jira' | 'notion' | 'ai' | 'server' | 'pomodoro';
 
 const SECTIONS: { key: Section; label: string; icon: string }[] = [
+  { key: 'google', label: 'Google', icon: '🔗' },
   { key: 'weather', label: 'Weather', icon: '🌤' },
   { key: 'news', label: 'News', icon: '📰' },
   { key: 'calendar', label: 'Calendar', icon: '📅' },
@@ -72,20 +74,32 @@ function Field({
 
 export function SettingsPanel({ open, onClose }: Props) {
   const [cfg, setCfg] = useState<ConfigResponse | null>(null);
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
-  const [activeSection, setActiveSection] = useState<Section>('weather');
+  const [activeSection, setActiveSection] = useState<Section>('google');
+  const [disconnecting, setDisconnecting] = useState(false);
 
   useEffect(() => {
     if (open && !cfg) {
       setLoading(true);
-      fetchConfig()
-        .then(setCfg)
+      Promise.all([fetchConfig(), fetchAuthStatus()])
+        .then(([c, a]) => { setCfg(c); setAuthStatus(a); })
         .catch(() => setSaveMsg('Failed to load config'))
         .finally(() => setLoading(false));
     }
   }, [open, cfg]);
+
+  async function handleDisconnectGoogle() {
+    setDisconnecting(true);
+    try {
+      await disconnectGoogle();
+      setAuthStatus(prev => prev ? { ...prev, google: { ...prev.google, connected: false } } : prev);
+    } finally {
+      setDisconnecting(false);
+    }
+  }
 
   async function handleSave() {
     if (!cfg) return;
@@ -164,6 +178,69 @@ export function SettingsPanel({ open, onClose }: Props) {
             {loading && <p className="text-sm text-gray-500">Loading…</p>}
             {!loading && cfg && (
               <div className="space-y-4">
+                {activeSection === 'google' && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-300">Google Account</span>
+                      {authStatus?.google.connected && (
+                        <span className="text-xs bg-emerald-900/50 text-emerald-400 border border-emerald-700 px-2 py-0.5 rounded-full">Connected</span>
+                      )}
+                    </div>
+
+                    {authStatus?.google.connected ? (
+                      <div className="space-y-3">
+                        <p className="text-xs text-gray-400">
+                          Your Google account is connected. Calendar and Gmail will use the Google APIs.
+                        </p>
+                        <button
+                          onClick={handleDisconnectGoogle}
+                          disabled={disconnecting}
+                          className="w-full py-2 px-4 bg-red-900/40 hover:bg-red-900/60 text-red-400 hover:text-red-300 text-sm rounded border border-red-800 transition-colors disabled:opacity-50"
+                        >
+                          {disconnecting ? 'Disconnecting…' : 'Disconnect Google Account'}
+                        </button>
+                      </div>
+                    ) : authStatus?.google.configured ? (
+                      <div className="space-y-3">
+                        <p className="text-xs text-gray-400">
+                          OAuth credentials are configured. Click below to sign in with your Google account.
+                        </p>
+                        <a
+                          href={googleAuthURL()}
+                          className="flex items-center justify-center gap-2 w-full py-2 px-4 bg-white hover:bg-gray-100 text-gray-900 text-sm font-medium rounded transition-colors"
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                          </svg>
+                          Sign in with Google
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <p className="text-xs text-gray-400">
+                          Set your Google OAuth2 credentials to enable single sign-on for Calendar and Gmail.
+                        </p>
+                        <div className="rounded-lg border border-amber-800/50 bg-amber-950/20 p-3 space-y-2">
+                          <p className="text-xs text-amber-400 font-medium">Setup steps:</p>
+                          <ol className="text-xs text-gray-400 space-y-1 list-decimal list-inside">
+                            <li>Go to Google Cloud Console → APIs &amp; Services → Credentials</li>
+                            <li>Create an OAuth 2.0 Client ID (Web application)</li>
+                            <li>Add <code className="bg-gray-800 px-1 rounded text-gray-300">http://localhost:8080/api/auth/google/callback</code> as an authorized redirect URI</li>
+                            <li>Enable the Calendar API and Gmail API in your project</li>
+                            <li>Paste your Client ID and Secret below, then save</li>
+                          </ol>
+                        </div>
+                        <Field label="Client ID" value={cfg?.google.client_id ?? ''} onChange={v => set('google', 'client_id', v)} placeholder="....apps.googleusercontent.com" />
+                        <Field label="Client Secret" value={cfg?.google.client_secret ?? ''} onChange={v => set('google', 'client_secret', v)} placeholder="GOCSPX-..." />
+                        <p className="text-xs text-gray-500">After saving, restart the server then click "Sign in with Google".</p>
+                      </div>
+                    )}
+                  </>
+                )}
+
                 {activeSection === 'weather' && (
                   <>
                     <div className="flex items-center justify-between">
@@ -194,8 +271,16 @@ export function SettingsPanel({ open, onClose }: Props) {
                       <span className="text-sm font-medium text-gray-300">Calendar</span>
                       <Toggle checked={cfg.google.calendar_enabled} onChange={v => set('google', 'calendar_enabled', v)} />
                     </div>
-                    <p className="text-xs text-gray-500">Paste your private iCal URL from Google Calendar, iCloud, or Outlook.</p>
-                    <Field label="iCal URL" value={cfg.google.ical_url} onChange={v => set('google', 'ical_url', v)} placeholder="https://calendar.google.com/calendar/ical/..." />
+                    {authStatus?.google.connected ? (
+                      <p className="text-xs text-emerald-400">Using Google Calendar API via OAuth ✓</p>
+                    ) : (
+                      <>
+                        <p className="text-xs text-gray-500">
+                          Connect Google in the <button className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2" onClick={() => setActiveSection('google')}>Google</button> section for live calendar sync, or paste a private iCal URL below.
+                        </p>
+                        <Field label="iCal URL" value={cfg.google.ical_url} onChange={v => set('google', 'ical_url', v)} placeholder="https://calendar.google.com/calendar/ical/..." />
+                      </>
+                    )}
                   </>
                 )}
 
@@ -213,13 +298,23 @@ export function SettingsPanel({ open, onClose }: Props) {
                 {activeSection === 'email' && (
                   <>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-300">Email (IMAP)</span>
+                      <span className="text-sm font-medium text-gray-300">Email</span>
                       <Toggle checked={cfg.email.enabled} onChange={v => set('email', 'enabled', v)} />
                     </div>
-                    <Field label="IMAP Server" value={cfg.email.imap_server} onChange={v => set('email', 'imap_server', v)} placeholder="imap.gmail.com" />
-                    <Field label="Port" value={cfg.email.imap_port} type="number" onChange={v => set('email', 'imap_port', parseInt(v, 10) || 993)} />
-                    <Field label="Username" value={cfg.email.username} onChange={v => set('email', 'username', v)} placeholder="you@example.com" />
-                    <Field label="Password" value={cfg.email.password} onChange={v => set('email', 'password', v)} placeholder="App password" />
+                    {authStatus?.google.connected ? (
+                      <p className="text-xs text-emerald-400">Using Gmail API via OAuth ✓</p>
+                    ) : (
+                      <>
+                        <p className="text-xs text-gray-500">
+                          Connect Google in the <button className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2" onClick={() => setActiveSection('google')}>Google</button> section for Gmail, or configure IMAP below.
+                        </p>
+                        <p className="text-xs text-gray-600 font-medium mt-2">IMAP fallback</p>
+                        <Field label="IMAP Server" value={cfg.email.imap_server} onChange={v => set('email', 'imap_server', v)} placeholder="imap.gmail.com" />
+                        <Field label="Port" value={cfg.email.imap_port} type="number" onChange={v => set('email', 'imap_port', parseInt(v, 10) || 993)} />
+                        <Field label="Username" value={cfg.email.username} onChange={v => set('email', 'username', v)} placeholder="you@example.com" />
+                        <Field label="Password" value={cfg.email.password} onChange={v => set('email', 'password', v)} placeholder="App password" />
+                      </>
+                    )}
                   </>
                 )}
 
