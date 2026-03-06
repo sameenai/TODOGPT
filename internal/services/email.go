@@ -173,7 +173,7 @@ func (s *EmailService) fetchFromGmail(client *http.Client) ([]models.EmailMessag
 	if err != nil {
 		return nil, fmt.Errorf("gmail list request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	var listData gmailListResp
 	if err := json.NewDecoder(resp.Body).Decode(&listData); err != nil {
@@ -203,7 +203,7 @@ func (s *EmailService) fetchGmailMessage(client *http.Client, id string) (models
 	if err != nil {
 		return models.EmailMessage{}, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	var data gmailMsgResp
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {

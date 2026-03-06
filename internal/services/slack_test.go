@@ -181,9 +181,10 @@ func TestSlackFetchFromAPI(t *testing.T) {
 	mux.HandleFunc("/users.info", func(w http.ResponseWriter, r *http.Request) {
 		uid := r.URL.Query().Get("user")
 		name := "unknown"
-		if uid == "U123" {
+		switch uid {
+		case "U123":
 			name = "alice"
-		} else if uid == "U456" {
+		case "U456":
 			name = "bob"
 		}
 		resp := slackUserResp{OK: true}
