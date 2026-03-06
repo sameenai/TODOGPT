@@ -50,13 +50,6 @@ func TestDefaultConfig(t *testing.T) {
 		}
 	}
 
-	if !cfg.Google.CalendarEnabled {
-		t.Error("expected Google Calendar enabled by default")
-	}
-	if !cfg.Google.GmailEnabled {
-		t.Error("expected Gmail enabled by default")
-	}
-
 	if cfg.Slack.Enabled {
 		t.Error("expected Slack disabled by default")
 	}

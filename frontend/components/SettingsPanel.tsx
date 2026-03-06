@@ -267,10 +267,7 @@ export function SettingsPanel({ open, onClose }: Props) {
 
                 {activeSection === 'calendar' && (
                   <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-300">Calendar</span>
-                      <Toggle checked={cfg.google.calendar_enabled} onChange={v => set('google', 'calendar_enabled', v)} />
-                    </div>
+                    <span className="text-sm font-medium text-gray-300">Calendar</span>
                     {authStatus?.google.connected ? (
                       <p className="text-xs text-emerald-400">Using Google Calendar API via OAuth ✓</p>
                     ) : (
@@ -291,7 +288,6 @@ export function SettingsPanel({ open, onClose }: Props) {
                       <Toggle checked={cfg.slack.enabled} onChange={v => set('slack', 'enabled', v)} />
                     </div>
                     <Field label="Bot Token" value={cfg.slack.bot_token} onChange={v => set('slack', 'bot_token', v)} placeholder="xoxb-..." />
-                    <Field label="App Token" value={cfg.slack.app_token} onChange={v => set('slack', 'app_token', v)} placeholder="xapp-..." />
                   </>
                 )}
 
