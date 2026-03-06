@@ -142,7 +142,7 @@ func (s *SlackService) fetchChannel(channelID string) ([]models.SlackMessage, er
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Slack API returned %d", resp.StatusCode)
+		return nil, fmt.Errorf("slack API returned %d", resp.StatusCode)
 	}
 
 	var parsed slackHistoryResp
@@ -150,7 +150,7 @@ func (s *SlackService) fetchChannel(channelID string) ([]models.SlackMessage, er
 		return nil, err
 	}
 	if !parsed.OK {
-		return nil, fmt.Errorf("Slack error: %s", parsed.Error)
+		return nil, fmt.Errorf("slack error: %s", parsed.Error)
 	}
 
 	// Determine channel name and DM status

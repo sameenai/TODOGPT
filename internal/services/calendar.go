@@ -135,7 +135,7 @@ func (s *CalendarService) fetchGoogleCalendar(client *http.Client) ([]models.Cal
 	if err != nil {
 		return nil, fmt.Errorf("google calendar request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	var parsed gcalEventsResp
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
@@ -195,7 +195,7 @@ func (s *CalendarService) fetchICalEvents() ([]models.CalendarEvent, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetching iCal URL: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("iCal URL returned HTTP %d", resp.StatusCode)
 	}

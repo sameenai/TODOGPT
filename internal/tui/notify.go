@@ -31,8 +31,8 @@ func platformNotify(title, body string) {
 	switch runtime.GOOS {
 	case "darwin":
 		script := fmt.Sprintf(`display notification %q with title %q`, body, title)
-		exec.Command("osascript", "-e", script).Run() // #nosec G204
+		_ = exec.Command("osascript", "-e", script).Run() // #nosec G204
 	case "linux":
-		exec.Command("notify-send", "--urgency=normal", title, body).Run() // #nosec G204
+		_ = exec.Command("notify-send", "--urgency=normal", title, body).Run() // #nosec G204
 	}
 }

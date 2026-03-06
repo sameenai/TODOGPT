@@ -1189,10 +1189,6 @@ func TestHandleAuthGoogleCallbackExchangeError(t *testing.T) {
 	// Generate a valid state via AuthURL, then use it with a bad code.
 	// The oauth2 exchange will fail because the token URL is Google's real endpoint
 	// which won't accept our test credentials.
-	s.hub.GoogleAuth.AuthURL("http://localhost:3000")
-	if !s.hub.GoogleAuth.ValidateState("") {
-		// state is stored; use any wrong state to get a distinct behaviour
-	}
 	// Use the state from the auth service — call AuthURL to get back the URL,
 	// then extract the state from the URL query parameter.
 	authURL := s.hub.GoogleAuth.AuthURL("http://localhost:3000")
