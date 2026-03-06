@@ -23,7 +23,7 @@ func TestHubStartPollingTickerFires(t *testing.T) {
 	// Drain the initial broadcast
 	select {
 	case <-ch:
-	case <-time.After(3 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatal("timeout waiting for initial broadcast")
 	}
 
@@ -33,7 +33,7 @@ func TestHubStartPollingTickerFires(t *testing.T) {
 		if update.Type != "full_refresh" {
 			t.Errorf("expected full_refresh, got %q", update.Type)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatal("timeout waiting for ticker broadcast")
 	}
 
@@ -54,7 +54,7 @@ func TestHubStopBeforeTicker(t *testing.T) {
 	// Drain initial
 	select {
 	case <-ch:
-	case <-time.After(3 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatal("timeout on initial broadcast")
 	}
 

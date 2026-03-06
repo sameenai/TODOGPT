@@ -20,6 +20,7 @@ linters:
         - fmt.Fprintf
         - fmt.Printf
         - fmt.Println
+        - (io.Closer).Close
     gocritic:
       disabled-checks:
         - ifElseChain

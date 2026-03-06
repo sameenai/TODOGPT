@@ -77,7 +77,7 @@ func (s *AIService) callClaude(prompt string, maxTokens int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close() // #nosec G307
+	defer resp.Body.Close() //nolint:errcheck // #nosec G307
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("claude API returned %d", resp.StatusCode)
@@ -252,9 +252,10 @@ func buildReviewPrompt(b *models.Briefing) string {
 	completed := []models.TodoItem{}
 	pending := []models.TodoItem{}
 	for _, t := range b.Todos {
-		if t.Status == models.TodoDone {
+		switch t.Status {
+		case models.TodoDone:
 			completed = append(completed, t)
-		} else if t.Status == models.TodoPending || t.Status == models.TodoInProgress {
+		case models.TodoPending, models.TodoInProgress:
 			pending = append(pending, t)
 		}
 	}

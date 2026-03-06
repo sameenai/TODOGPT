@@ -101,7 +101,7 @@ func (s *JiraService) fetchFromAPI() ([]models.JiraTicket, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close() // #nosec G307
+	defer resp.Body.Close() //nolint:errcheck // #nosec G307
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("jira API returned %d", resp.StatusCode)

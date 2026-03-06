@@ -195,7 +195,7 @@ func TestFetchHackerNewsStoryItemInvalidJSON(t *testing.T) {
 		} else {
 			// Return invalid JSON for the item
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"id":%d,"title":`, 1)))
+			fmt.Fprintf(w, `{"id":%d,"title":`, 1)
 		}
 	}))
 	defer ts.Close()

@@ -166,7 +166,7 @@ func (g *GoogleAuthService) saveToken(token *oauth2.Token) error {
 	if err := os.MkdirAll(filepath.Dir(g.tokenPath), 0750); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(token, "", "  ")
+	data, err := json.MarshalIndent(token, "", "  ") // #nosec G117 -- intentionally serializing OAuth token to user's config dir
 	if err != nil {
 		return err
 	}
