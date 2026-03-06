@@ -51,13 +51,6 @@ type GoogleConfig struct {
 	ClientID     string `json:"client_id,omitempty"`
 	ClientSecret string `json:"client_secret,omitempty"`
 
-	// Legacy fields kept for backward compatibility.
-	CredentialsFile string `json:"credentials_file"`
-	TokenFile       string `json:"token_file"`
-
-	CalendarEnabled bool `json:"calendar_enabled"`
-	GmailEnabled    bool `json:"gmail_enabled"`
-
 	// ICalURL is a private iCalendar subscription URL (works with Google Calendar,
 	// iCloud, Outlook — no OAuth required). When set, real calendar data is fetched.
 	ICalURL string `json:"ical_url,omitempty"`
@@ -65,7 +58,6 @@ type GoogleConfig struct {
 
 type SlackConfig struct {
 	BotToken string   `json:"bot_token,omitempty"`
-	AppToken string   `json:"app_token,omitempty"`
 	Channels []string `json:"channels"`
 	Enabled  bool     `json:"enabled"`
 }
@@ -127,12 +119,7 @@ func DefaultConfig() *Config {
 			MaxItems: 10,
 			Enabled:  true,
 		},
-		Google: GoogleConfig{
-			CredentialsFile: "credentials.json",
-			TokenFile:       "token.json",
-			CalendarEnabled: true,
-			GmailEnabled:    true,
-		},
+		Google: GoogleConfig{},
 		Slack: SlackConfig{
 			Enabled: false,
 		},
