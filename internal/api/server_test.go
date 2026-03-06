@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -1059,5 +1060,183 @@ func TestHandleTodoActionPUT(t *testing.T) {
 				t.Errorf("expected description 'test desc', got %q", item.Description)
 			}
 		}
+	}
+}
+
+// ── Auth handler tests ────────────────────────────────────────────────────────
+
+func testServerWithGoogleAuth(t *testing.T) *Server {
+	t.Helper()
+	cfg := config.DefaultConfig()
+	cfg.Server.DataDir = t.TempDir()
+	cfg.Google.ClientID = "test-client-id"
+	cfg.Google.ClientSecret = "test-client-secret"
+	hub := services.NewHub(cfg)
+	return NewServer(hub, "localhost", 8080)
+}
+
+func TestHandleAuthStatusNotConfigured(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("GET", "/api/auth/status", nil)
+	w := httptest.NewRecorder()
+	s.handleAuthStatus(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp map[string]map[string]bool
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	g := resp["google"]
+	if g["configured"] {
+		t.Error("expected configured=false")
+	}
+	if g["connected"] {
+		t.Error("expected connected=false")
+	}
+}
+
+func TestHandleAuthStatusConfigured(t *testing.T) {
+	s := testServerWithGoogleAuth(t)
+	req := httptest.NewRequest("GET", "/api/auth/status", nil)
+	w := httptest.NewRecorder()
+	s.handleAuthStatus(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp map[string]map[string]bool
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if !resp["google"]["configured"] {
+		t.Error("expected configured=true")
+	}
+}
+
+func TestHandleAuthStatusMethodNotAllowed(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("POST", "/api/auth/status", nil)
+	w := httptest.NewRecorder()
+	s.handleAuthStatus(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
+	}
+}
+
+func TestHandleAuthGoogleNotConfigured(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("GET", "/api/auth/google", nil)
+	w := httptest.NewRecorder()
+	s.handleAuthGoogle(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 when not configured, got %d", w.Code)
+	}
+}
+
+func TestHandleAuthGoogleRedirects(t *testing.T) {
+	s := testServerWithGoogleAuth(t)
+	req := httptest.NewRequest("GET", "/api/auth/google?return_to=http://localhost:3000", nil)
+	w := httptest.NewRecorder()
+	s.handleAuthGoogle(w, req)
+	if w.Code != http.StatusFound {
+		t.Errorf("expected 302 redirect, got %d", w.Code)
+	}
+	loc := w.Header().Get("Location")
+	if loc == "" {
+		t.Error("expected Location header")
+	}
+}
+
+func TestHandleAuthGoogleMethodNotAllowed(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("POST", "/api/auth/google", nil)
+	w := httptest.NewRecorder()
+	s.handleAuthGoogle(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
+	}
+}
+
+func TestHandleAuthGoogleCallbackDenied(t *testing.T) {
+	s := testServerWithGoogleAuth(t)
+	req := httptest.NewRequest("GET", "/api/auth/google/callback?error=access_denied", nil)
+	w := httptest.NewRecorder()
+	s.handleAuthGoogleCallback(w, req)
+	if w.Code != http.StatusFound {
+		t.Errorf("expected 302 redirect on denied, got %d", w.Code)
+	}
+	if !strings.Contains(w.Header().Get("Location"), "google=denied") {
+		t.Error("expected google=denied in redirect")
+	}
+}
+
+func TestHandleAuthGoogleCallbackInvalidState(t *testing.T) {
+	s := testServerWithGoogleAuth(t)
+	req := httptest.NewRequest("GET", "/api/auth/google/callback?code=someCode&state=wrong-state", nil)
+	w := httptest.NewRecorder()
+	s.handleAuthGoogleCallback(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid state, got %d", w.Code)
+	}
+}
+
+func TestHandleAuthGoogleCallbackExchangeError(t *testing.T) {
+	s := testServerWithGoogleAuth(t)
+	go s.wsHub.Run()
+
+	// Generate a valid state via AuthURL, then use it with a bad code.
+	// The oauth2 exchange will fail because the token URL is Google's real endpoint
+	// which won't accept our test credentials.
+	s.hub.GoogleAuth.AuthURL("http://localhost:3000")
+	if !s.hub.GoogleAuth.ValidateState("") {
+		// state is stored; use any wrong state to get a distinct behaviour
+	}
+	// Use the state from the auth service — call AuthURL to get back the URL,
+	// then extract the state from the URL query parameter.
+	authURL := s.hub.GoogleAuth.AuthURL("http://localhost:3000")
+	// Parse state from the returned URL.
+	parsed, _ := url.Parse(authURL)
+	state := parsed.Query().Get("state")
+
+	req := httptest.NewRequest("GET", "/api/auth/google/callback?code=bad-code&state="+state, nil)
+	w := httptest.NewRecorder()
+	s.handleAuthGoogleCallback(w, req)
+	if w.Code != http.StatusFound {
+		t.Errorf("expected 302 redirect on exchange error, got %d", w.Code)
+	}
+	if !strings.Contains(w.Header().Get("Location"), "google=error") {
+		t.Error("expected google=error in redirect")
+	}
+}
+
+func TestHandleAuthGoogleCallbackMethodNotAllowed(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("POST", "/api/auth/google/callback", nil)
+	w := httptest.NewRecorder()
+	s.handleAuthGoogleCallback(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
+	}
+}
+
+func TestHandleAuthGoogleDisconnect(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("POST", "/api/auth/google/disconnect", nil)
+	w := httptest.NewRecorder()
+	s.handleAuthGoogleDisconnect(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestHandleAuthGoogleDisconnectMethodNotAllowed(t *testing.T) {
+	s := testServer(t)
+	req := httptest.NewRequest("GET", "/api/auth/google/disconnect", nil)
+	w := httptest.NewRecorder()
+	s.handleAuthGoogleDisconnect(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
 	}
 }

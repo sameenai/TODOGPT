@@ -2,8 +2,10 @@ package services
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -533,5 +535,93 @@ func TestParseSlackTSPrecision(t *testing.T) {
 	diff := t2.Sub(t1)
 	if diff != 60*time.Second {
 		t.Errorf("expected 60s diff, got %v", diff)
+	}
+}
+
+func TestSlackBotMessageSkipped(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "conversations.history") {
+			// Return a bot message (should be skipped) and a regular message
+			fmt.Fprint(w, `{"ok":true,"messages":[
+				{"type":"message","subtype":"bot_message","bot_id":"B001","text":"bot says hi","user":"U001","ts":"1000000.0"},
+				{"type":"message","text":"hello from human","user":"U002","ts":"1000001.0"}
+			]}`)
+			return
+		}
+		if strings.Contains(r.URL.Path, "users.info") {
+			fmt.Fprint(w, `{"ok":true,"user":{"id":"U002","name":"human","profile":{"display_name":"Human User"}}}`)
+			return
+		}
+		if strings.Contains(r.URL.Path, "conversations.info") {
+			fmt.Fprint(w, `{"ok":true,"channel":{"id":"C001","name":"general","is_im":false}}`)
+			return
+		}
+	}))
+	defer srv.Close()
+
+	orig := slackAPIBase
+	slackAPIBase = srv.URL
+	defer func() { slackAPIBase = orig }()
+
+	svc := NewSlackService(config.SlackConfig{
+		Enabled:  true,
+		BotToken: "xoxb-test",
+		Channels: []string{"C001"},
+	})
+
+	msgs, err := svc.fetchChannel("C001")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Only the human message should be included
+	if len(msgs) != 1 {
+		t.Errorf("expected 1 message (bot message skipped), got %d", len(msgs))
+	}
+}
+
+func TestSlackResolveUserRealName(t *testing.T) {
+	// DisplayName is empty, should fall back to RealName
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"ok":true,"user":{"id":"U001","name":"username","profile":{"display_name":"","real_name":"Real Name"}}}`)
+	}))
+	defer srv.Close()
+
+	orig := slackAPIBase
+	slackAPIBase = srv.URL
+	defer func() { slackAPIBase = orig }()
+
+	svc := NewSlackService(config.SlackConfig{
+		Enabled:  true,
+		BotToken: "xoxb-test",
+	})
+
+	name := svc.resolveUser("U001")
+	if name != "Real Name" {
+		t.Errorf("expected 'Real Name', got %q", name)
+	}
+}
+
+func TestSlackResolveUserFallbackToUsername(t *testing.T) {
+	// Both DisplayName and RealName are empty, should fall back to Name
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"ok":true,"user":{"id":"U001","name":"username","profile":{"display_name":"","real_name":""}}}`)
+	}))
+	defer srv.Close()
+
+	orig := slackAPIBase
+	slackAPIBase = srv.URL
+	defer func() { slackAPIBase = orig }()
+
+	svc := NewSlackService(config.SlackConfig{
+		Enabled:  true,
+		BotToken: "xoxb-test",
+	})
+
+	name := svc.resolveUser("U001")
+	if name != "username" {
+		t.Errorf("expected 'username', got %q", name)
 	}
 }

@@ -152,7 +152,7 @@ export interface ConfigResponse {
   server: { port: number; host: string; poll_interval_seconds: number };
   weather: { api_key: string; city: string; country: string; units: string; lat: number; lon: number; enabled: boolean };
   news: { api_key: string; sources: string[]; country: string; categories: string[]; max_items: number; enabled: boolean };
-  google: { ical_url: string; calendar_enabled: boolean; gmail_enabled: boolean; credentials_file: string; token_file: string };
+  google: { client_id: string; client_secret: string; ical_url: string; calendar_enabled: boolean; gmail_enabled: boolean; credentials_file: string; token_file: string };
   slack: { bot_token: string; app_token: string; channels: string[]; enabled: boolean };
   email: { imap_server: string; imap_port: number; username: string; password: string; enabled: boolean };
   github: { token: string; repos: string[]; enabled: boolean };

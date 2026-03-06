@@ -60,6 +60,10 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("/api/config", s.handleConfig)
 	s.mux.HandleFunc("/api/review", s.handleReview)
 	s.mux.HandleFunc("/api/timeblocks", s.handleTimeBlocks)
+	s.mux.HandleFunc("/api/auth/status", s.handleAuthStatus)
+	s.mux.HandleFunc("/api/auth/google", s.handleAuthGoogle)
+	s.mux.HandleFunc("/api/auth/google/callback", s.handleAuthGoogleCallback)
+	s.mux.HandleFunc("/api/auth/google/disconnect", s.handleAuthGoogleDisconnect)
 
 	// WebSocket
 	s.mux.HandleFunc("/ws", s.handleWebSocket)
@@ -437,6 +441,7 @@ func (s *Server) maskConfig(cfg *config.Config) map[string]interface{} {
 
 	redact("weather", "api_key")
 	redact("news", "api_key")
+	redact("google", "client_secret")
 	redact("slack", "bot_token", "app_token")
 	redact("email", "password")
 	redact("github", "token")
@@ -461,6 +466,7 @@ func mergeConfig(existing, incoming *config.Config) *config.Config {
 
 	merged.Weather.APIKey = keep(incoming.Weather.APIKey, existing.Weather.APIKey)
 	merged.News.APIKey = keep(incoming.News.APIKey, existing.News.APIKey)
+	merged.Google.ClientSecret = keep(incoming.Google.ClientSecret, existing.Google.ClientSecret)
 	merged.Slack.BotToken = keep(incoming.Slack.BotToken, existing.Slack.BotToken)
 	merged.Slack.AppToken = keep(incoming.Slack.AppToken, existing.Slack.AppToken)
 	merged.Email.Password = keep(incoming.Email.Password, existing.Email.Password)
@@ -470,6 +476,89 @@ func mergeConfig(existing, incoming *config.Config) *config.Config {
 	merged.AI.APIKey = keep(incoming.AI.APIKey, existing.AI.APIKey)
 
 	return &merged
+}
+
+// ── Google OAuth handlers ─────────────────────────────────────────────────────
+
+// handleAuthStatus returns the current connection status of all OAuth integrations.
+func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s.writeJSON(w, map[string]interface{}{
+		"google": map[string]bool{
+			"configured": s.hub.GoogleAuth.IsConfigured(),
+			"connected":  s.hub.GoogleAuth.IsConnected(),
+		},
+	})
+}
+
+// handleAuthGoogle redirects the browser to Google's OAuth2 consent page.
+func (s *Server) handleAuthGoogle(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	returnTo := r.URL.Query().Get("return_to") // frontend origin for post-auth redirect
+	authURL := s.hub.GoogleAuth.AuthURL(returnTo)
+	if authURL == "" {
+		http.Error(w, "Google OAuth not configured. Set google.client_id and google.client_secret in config.", http.StatusBadRequest)
+		return
+	}
+	http.Redirect(w, r, authURL, http.StatusFound)
+}
+
+// handleAuthGoogleCallback receives the authorization code from Google and
+// exchanges it for tokens, then redirects the browser back to the dashboard.
+func (s *Server) handleAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	code := r.URL.Query().Get("code")
+	state := r.URL.Query().Get("state")
+	errParam := r.URL.Query().Get("error")
+
+	if errParam != "" {
+		http.Redirect(w, r, "/?google=denied", http.StatusFound)
+		return
+	}
+
+	if !s.hub.GoogleAuth.ValidateState(state) {
+		http.Error(w, "Invalid OAuth state — possible CSRF attack", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.hub.GoogleAuth.Exchange(r.Context(), code); err != nil {
+		log.Printf("Google OAuth exchange error: %v", err)
+		http.Redirect(w, r, "/?google=error", http.StatusFound)
+		return
+	}
+
+	// Broadcast a refresh so the dashboard updates immediately.
+	s.hub.Broadcast(models.DashboardUpdate{Type: "google_connected"})
+
+	// Redirect back to the frontend (Next.js dev server or production origin).
+	returnTo := s.hub.GoogleAuth.ReturnTo()
+	if returnTo == "" {
+		returnTo = "/" // fallback to Go's own dashboard
+	}
+	http.Redirect(w, r, returnTo+"?google=connected", http.StatusFound)
+}
+
+// handleAuthGoogleDisconnect deletes the stored Google token.
+func (s *Server) handleAuthGoogleDisconnect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := s.hub.GoogleAuth.Disconnect(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.writeJSON(w, map[string]string{"ok": "true"})
 }
 
 func mustJSON(v interface{}) []byte {

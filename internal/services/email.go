@@ -1,7 +1,11 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -10,6 +14,9 @@ import (
 	"github.com/todogpt/daily-briefing/internal/config"
 	"github.com/todogpt/daily-briefing/internal/models"
 )
+
+// googleGmailBaseURL is a package-level variable so tests can override it.
+var googleGmailBaseURL = "https://www.googleapis.com/gmail/v1"
 
 // imapClientIface abstracts the go-imap client for testability.
 type imapClientIface interface {
@@ -26,6 +33,7 @@ var imapDial = func(addr string) (imapClientIface, error) {
 
 type EmailService struct {
 	cfg   config.EmailConfig
+	auth  *GoogleAuthService // nil when OAuth is not configured
 	cache []models.EmailMessage
 	mu    sync.RWMutex
 }
@@ -34,13 +42,42 @@ func NewEmailService(cfg config.EmailConfig) *EmailService {
 	return &EmailService{cfg: cfg}
 }
 
-// IsLive returns true when IMAP credentials are configured and enabled.
+// NewEmailServiceWithAuth creates an EmailService that uses Gmail API when
+// the GoogleAuthService has a valid token.
+func NewEmailServiceWithAuth(cfg config.EmailConfig, auth *GoogleAuthService) *EmailService {
+	return &EmailService{cfg: cfg, auth: auth}
+}
+
+// IsLive returns true when Gmail OAuth is connected, or IMAP credentials are set.
 func (s *EmailService) IsLive() bool {
+	if s.auth != nil && s.auth.IsConnected() {
+		return true
+	}
 	return s.cfg.Enabled && s.cfg.Username != "" && s.cfg.Password != ""
 }
 
 func (s *EmailService) Fetch() ([]models.EmailMessage, error) {
-	if !s.IsLive() {
+	// Prefer Gmail API when OAuth is connected.
+	if s.auth != nil && s.auth.IsConnected() {
+		msgs, err := s.fetchFromGmail(s.auth.Client())
+		if err != nil {
+			s.mu.RLock()
+			cached := s.cache
+			s.mu.RUnlock()
+			if cached != nil {
+				return cached, nil
+			}
+			// Fall through to IMAP if configured
+		} else {
+			s.mu.Lock()
+			s.cache = msgs
+			s.mu.Unlock()
+			return msgs, nil
+		}
+	}
+
+	// IMAP fallback
+	if !s.cfg.Enabled || s.cfg.Username == "" || s.cfg.Password == "" {
 		msgs := s.mockEmails()
 		s.mu.Lock()
 		s.cache = msgs
@@ -88,6 +125,144 @@ func (s *EmailService) UnreadCount() int {
 		}
 	}
 	return count
+}
+
+// ── Gmail REST API ────────────────────────────────────────────────────────────
+
+type gmailListResp struct {
+	Messages []struct {
+		ID       string `json:"id"`
+		ThreadID string `json:"threadId"`
+	} `json:"messages"`
+	Error *struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+type gmailMsgResp struct {
+	ID       string   `json:"id"`
+	ThreadID string   `json:"threadId"`
+	LabelIDs []string `json:"labelIds"`
+	Snippet  string   `json:"snippet"`
+	Payload  struct {
+		Headers []struct {
+			Name  string `json:"name"`
+			Value string `json:"value"`
+		} `json:"headers"`
+	} `json:"payload"`
+}
+
+func (s *EmailService) fetchFromGmail(client *http.Client) ([]models.EmailMessage, error) {
+	if client == nil {
+		return nil, fmt.Errorf("no authenticated client")
+	}
+
+	// List unread inbox messages.
+	listURL := fmt.Sprintf(
+		"%s/users/me/messages?%s",
+		googleGmailBaseURL,
+		url.Values{
+			"labelIds":   {"INBOX"},
+			"q":          {"is:unread OR is:starred"},
+			"maxResults": {"20"},
+		}.Encode(),
+	)
+
+	resp, err := client.Get(listURL)
+	if err != nil {
+		return nil, fmt.Errorf("gmail list request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var listData gmailListResp
+	if err := json.NewDecoder(resp.Body).Decode(&listData); err != nil {
+		return nil, fmt.Errorf("gmail list decode: %w", err)
+	}
+	if listData.Error != nil {
+		return nil, fmt.Errorf("gmail API error %d: %s", listData.Error.Code, listData.Error.Message)
+	}
+
+	var result []models.EmailMessage
+	for _, m := range listData.Messages {
+		msg, err := s.fetchGmailMessage(client, m.ID)
+		if err != nil {
+			continue
+		}
+		result = append(result, msg)
+	}
+	return result, nil
+}
+
+func (s *EmailService) fetchGmailMessage(client *http.Client, id string) (models.EmailMessage, error) {
+	msgURL := fmt.Sprintf(
+		"%s/users/me/messages/%s?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date",
+		googleGmailBaseURL, id,
+	)
+	resp, err := client.Get(msgURL)
+	if err != nil {
+		return models.EmailMessage{}, err
+	}
+	defer resp.Body.Close()
+
+	var data gmailMsgResp
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return models.EmailMessage{}, err
+	}
+
+	headers := make(map[string]string)
+	for _, h := range data.Payload.Headers {
+		headers[strings.ToLower(h.Name)] = h.Value
+	}
+
+	date := time.Now()
+	if d, err := parseEmailDate(headers["date"]); err == nil {
+		date = d
+	}
+
+	isUnread := false
+	isStarred := false
+	for _, label := range data.LabelIDs {
+		if label == "UNREAD" {
+			isUnread = true
+		}
+		if label == "STARRED" {
+			isStarred = true
+		}
+	}
+
+	labels := make([]string, 0, len(data.LabelIDs))
+	for _, l := range data.LabelIDs {
+		labels = append(labels, strings.ToLower(l))
+	}
+
+	return models.EmailMessage{
+		ID:        data.ID,
+		From:      headers["from"],
+		Subject:   headers["subject"],
+		Snippet:   data.Snippet,
+		Date:      date,
+		IsUnread:  isUnread,
+		IsStarred: isStarred,
+		Labels:    labels,
+	}, nil
+}
+
+// parseEmailDate parses RFC2822 / RFC1123Z email date headers.
+func parseEmailDate(s string) (time.Time, error) {
+	formats := []string{
+		"Mon, 02 Jan 2006 15:04:05 -0700",
+		"Mon, 02 Jan 2006 15:04:05 MST",
+		"02 Jan 2006 15:04:05 -0700",
+		time.RFC1123Z,
+		time.RFC1123,
+	}
+	for _, f := range formats {
+		if t, err := time.Parse(f, s); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unrecognised date: %s", s)
 }
 
 // ── IMAP ──────────────────────────────────────────────────────────────────────

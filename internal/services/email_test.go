@@ -2,6 +2,9 @@ package services
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -529,5 +532,373 @@ func TestEmailFetchIMAPConnectionErrorWithCache(t *testing.T) {
 	count := svc.UnreadCount()
 	if count == 0 {
 		t.Error("expected non-zero unread count")
+	}
+}
+
+// ── Gmail API tests ────────────────────────────────────────────────────────────
+
+func gmailListJSON(ids ...string) string {
+	items := ""
+	for i, id := range ids {
+		if i > 0 {
+			items += ","
+		}
+		items += fmt.Sprintf(`{"id":%q,"threadId":"t%s"}`, id, id)
+	}
+	return `{"messages":[` + items + `]}`
+}
+
+func gmailMsgJSON(id, subject, from, date string, unread, starred bool) string {
+	labels := `["INBOX"`
+	if unread {
+		labels += `,"UNREAD"`
+	}
+	if starred {
+		labels += `,"STARRED"`
+	}
+	labels += `]`
+	return fmt.Sprintf(`{"id":%q,"snippet":"snippet for %s","labelIds":%s,"payload":{"headers":[{"name":"Subject","value":%q},{"name":"From","value":%q},{"name":"Date","value":%q}]}}`,
+		id, id, labels, subject, from, date)
+}
+
+func newGmailTestServer(t *testing.T, listBody string, msgHandler func(id string) string) (*httptest.Server, func()) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/users/me/messages" {
+			fmt.Fprint(w, listBody)
+			return
+		}
+		// /users/me/messages/{id}
+		parts := strings.Split(r.URL.Path, "/")
+		id := parts[len(parts)-1]
+		fmt.Fprint(w, msgHandler(id))
+	}))
+	orig := googleGmailBaseURL
+	googleGmailBaseURL = srv.URL
+	cleanup := func() {
+		srv.Close()
+		googleGmailBaseURL = orig
+	}
+	return srv, cleanup
+}
+
+func TestFetchFromGmailSuccess(t *testing.T) {
+	date := "Mon, 01 Jan 2024 12:00:00 +0000"
+	_, cleanup := newGmailTestServer(t,
+		gmailListJSON("msg1", "msg2"),
+		func(id string) string {
+			return gmailMsgJSON(id, "Subject "+id, "sender@example.com", date, true, false)
+		},
+	)
+	defer cleanup()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	svc := NewEmailServiceWithAuth(config.EmailConfig{}, auth)
+	msgs, err := svc.fetchFromGmail(auth.Client())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(msgs))
+	}
+	if !msgs[0].IsUnread {
+		t.Error("expected IsUnread=true")
+	}
+	if msgs[0].From != "sender@example.com" {
+		t.Errorf("expected from 'sender@example.com', got %q", msgs[0].From)
+	}
+}
+
+func TestFetchFromGmailStarred(t *testing.T) {
+	date := "Mon, 01 Jan 2024 12:00:00 +0000"
+	_, cleanup := newGmailTestServer(t,
+		gmailListJSON("starred1"),
+		func(id string) string {
+			return gmailMsgJSON(id, "Starred Email", "a@b.com", date, false, true)
+		},
+	)
+	defer cleanup()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	svc := NewEmailServiceWithAuth(config.EmailConfig{}, auth)
+	msgs, err := svc.fetchFromGmail(auth.Client())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(msgs) == 0 {
+		t.Fatal("expected at least one message")
+	}
+	if !msgs[0].IsStarred {
+		t.Error("expected IsStarred=true")
+	}
+}
+
+func TestFetchFromGmailAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"error":{"code":403,"message":"Forbidden"}}`)
+	}))
+	defer srv.Close()
+	orig := googleGmailBaseURL
+	googleGmailBaseURL = srv.URL
+	defer func() { googleGmailBaseURL = orig }()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	svc := NewEmailServiceWithAuth(config.EmailConfig{}, auth)
+	_, err := svc.fetchFromGmail(auth.Client())
+	if err == nil {
+		t.Error("expected error for API error response")
+	}
+}
+
+func TestFetchFromGmailNilClient(t *testing.T) {
+	svc := NewEmailService(config.EmailConfig{})
+	_, err := svc.fetchFromGmail(nil)
+	if err == nil {
+		t.Error("expected error for nil client")
+	}
+}
+
+func TestFetchFromGmailInvalidListJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "not-json")
+	}))
+	defer srv.Close()
+	orig := googleGmailBaseURL
+	googleGmailBaseURL = srv.URL
+	defer func() { googleGmailBaseURL = orig }()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	svc := NewEmailServiceWithAuth(config.EmailConfig{}, auth)
+	_, err := svc.fetchFromGmail(auth.Client())
+	if err == nil {
+		t.Error("expected error for invalid JSON")
+	}
+}
+
+func TestFetchGmailMessageSkipsFailedMsg(t *testing.T) {
+	// List returns msg1 and msg2; msg2 will return invalid JSON — should be skipped
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/users/me/messages" {
+			fmt.Fprint(w, gmailListJSON("good1", "bad1"))
+			return
+		}
+		parts := strings.Split(r.URL.Path, "/")
+		id := parts[len(parts)-1]
+		if id == "bad1" {
+			fmt.Fprint(w, "invalid-json")
+		} else {
+			fmt.Fprint(w, gmailMsgJSON(id, "Good Subject", "x@y.com", "Mon, 01 Jan 2024 12:00:00 +0000", true, false))
+		}
+	}))
+	defer srv.Close()
+	orig := googleGmailBaseURL
+	googleGmailBaseURL = srv.URL
+	defer func() { googleGmailBaseURL = orig }()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	svc := NewEmailServiceWithAuth(config.EmailConfig{}, auth)
+	msgs, err := svc.fetchFromGmail(auth.Client())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Errorf("expected 1 message (bad one skipped), got %d", len(msgs))
+	}
+}
+
+func TestEmailFetchUsesGmailWhenConnected(t *testing.T) {
+	date := "Mon, 01 Jan 2024 12:00:00 +0000"
+	_, cleanup := newGmailTestServer(t,
+		gmailListJSON("m1"),
+		func(id string) string {
+			return gmailMsgJSON(id, "Gmail Subject", "g@g.com", date, true, false)
+		},
+	)
+	defer cleanup()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	svc := NewEmailServiceWithAuth(config.EmailConfig{}, auth)
+	msgs, err := svc.Fetch()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(msgs) == 0 {
+		t.Fatal("expected messages from Gmail API")
+	}
+	if msgs[0].Subject != "Gmail Subject" {
+		t.Errorf("expected 'Gmail Subject', got %q", msgs[0].Subject)
+	}
+}
+
+func TestParseEmailDate(t *testing.T) {
+	cases := []struct {
+		in   string
+		fail bool
+	}{
+		{"Mon, 02 Jan 2006 15:04:05 -0700", false},
+		{"Mon, 02 Jan 2006 15:04:05 MST", false},
+		{"02 Jan 2006 15:04:05 -0700", false},
+		{"Mon, 02 Jan 2006 15:04:05 +0000", false},
+		{"not a date at all", true},
+		{"", true},
+	}
+	for _, c := range cases {
+		_, err := parseEmailDate(c.in)
+		if c.fail && err == nil {
+			t.Errorf("parseEmailDate(%q): expected error, got nil", c.in)
+		}
+		if !c.fail && err != nil {
+			t.Errorf("parseEmailDate(%q): unexpected error %v", c.in, err)
+		}
+	}
+}
+
+func TestEmailIsLiveWithConnectedAuth(t *testing.T) {
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	svc := NewEmailServiceWithAuth(config.EmailConfig{}, auth)
+	if !svc.IsLive() {
+		t.Error("expected IsLive=true when auth is connected")
+	}
+}
+
+func TestEmailFetchGmailErrorFallthrough(t *testing.T) {
+	// Gmail server that immediately closes the connection
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			w.WriteHeader(500)
+			return
+		}
+		conn, _, _ := hj.Hijack()
+		conn.Close()
+	}))
+	defer srv.Close()
+
+	orig := googleGmailBaseURL
+	googleGmailBaseURL = srv.URL
+	defer func() { googleGmailBaseURL = orig }()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	// No IMAP config — should fall to mock data
+	svc := NewEmailServiceWithAuth(config.EmailConfig{}, auth)
+	msgs, err := svc.Fetch()
+	// Error from Gmail, falls through to mock — no error returned
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(msgs) == 0 {
+		t.Error("expected mock messages when Gmail fails and no IMAP configured")
+	}
+}
+
+func TestFetchFromGmailNetworkError(t *testing.T) {
+	// Server that immediately closes the connection
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			w.WriteHeader(500)
+			return
+		}
+		conn, _, _ := hj.Hijack()
+		conn.Close()
+	}))
+	defer srv.Close()
+
+	orig := googleGmailBaseURL
+	googleGmailBaseURL = srv.URL
+	defer func() { googleGmailBaseURL = orig }()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	svc := NewEmailServiceWithAuth(config.EmailConfig{}, auth)
+	_, err := svc.fetchFromGmail(auth.Client())
+	if err == nil {
+		t.Error("expected error when connection is closed")
+	}
+}
+
+func TestFetchGmailMessageNetworkError(t *testing.T) {
+	// List endpoint works, message endpoint closes connection
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/users/me/messages" {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, gmailListJSON("net-err-msg"))
+			return
+		}
+		// Message endpoint — close connection
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			w.WriteHeader(500)
+			return
+		}
+		conn, _, _ := hj.Hijack()
+		conn.Close()
+	}))
+	defer srv.Close()
+
+	orig := googleGmailBaseURL
+	googleGmailBaseURL = srv.URL
+	defer func() { googleGmailBaseURL = orig }()
+
+	dir := t.TempDir()
+	auth := NewGoogleAuthService(testGoogleCfg(), "http://localhost:8080", dir)
+	auth.mu.Lock()
+	auth.token = validToken()
+	auth.mu.Unlock()
+
+	svc := NewEmailServiceWithAuth(config.EmailConfig{}, auth)
+	// The failed message is skipped — result is empty but no error
+	msgs, err := svc.fetchFromGmail(auth.Client())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(msgs) != 0 {
+		t.Errorf("expected 0 messages (failed message skipped), got %d", len(msgs))
 	}
 }

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -12,16 +13,17 @@ import (
 
 // Hub aggregates all services and manages polling/updates.
 type Hub struct {
-	Weather  *WeatherService
-	News     *NewsService
-	Calendar *CalendarService
-	Slack    *SlackService
-	Email    *EmailService
-	GitHub   *GitHubService
-	Jira     *JiraService
-	Notion   *NotionService
-	AI       *AIService
-	Todos    *TodoService
+	Weather    *WeatherService
+	News       *NewsService
+	Calendar   *CalendarService
+	Slack      *SlackService
+	Email      *EmailService
+	GitHub     *GitHubService
+	Jira       *JiraService
+	Notion     *NotionService
+	AI         *AIService
+	Todos      *TodoService
+	GoogleAuth *GoogleAuthService
 
 	cfg       *config.Config
 	listeners []chan models.DashboardUpdate
@@ -31,19 +33,24 @@ type Hub struct {
 
 func NewHub(cfg *config.Config) *Hub {
 	todosvc := newTodoService(cfg)
+
+	redirectBase := fmt.Sprintf("http://%s:%d", cfg.Server.Host, cfg.Server.Port)
+	googleAuth := NewGoogleAuthService(cfg.Google, redirectBase, cfg.Server.DataDir)
+
 	return &Hub{
-		Weather:  NewWeatherService(cfg.Weather),
-		News:     NewNewsService(cfg.News),
-		Calendar: NewCalendarService(cfg.Google),
-		Slack:    NewSlackService(cfg.Slack),
-		Email:    NewEmailService(cfg.Email),
-		GitHub:   NewGitHubService(cfg.GitHub),
-		Jira:     NewJiraService(cfg.Jira),
-		Notion:   NewNotionService(cfg.Notion),
-		AI:       NewAIService(cfg.AI),
-		Todos:    todosvc,
-		cfg:      cfg,
-		stopCh:   make(chan struct{}),
+		Weather:    NewWeatherService(cfg.Weather),
+		News:       NewNewsService(cfg.News),
+		Calendar:   NewCalendarServiceWithAuth(cfg.Google, googleAuth),
+		Slack:      NewSlackService(cfg.Slack),
+		Email:      NewEmailServiceWithAuth(cfg.Email, googleAuth),
+		GitHub:     NewGitHubService(cfg.GitHub),
+		Jira:       NewJiraService(cfg.Jira),
+		Notion:     NewNotionService(cfg.Notion),
+		AI:         NewAIService(cfg.AI),
+		Todos:      todosvc,
+		GoogleAuth: googleAuth,
+		cfg:        cfg,
+		stopCh:     make(chan struct{}),
 	}
 }
 
@@ -215,13 +222,12 @@ func (h *Hub) FetchAll() *models.Briefing {
 	}
 
 	// Record which integrations have real API code that can be enabled via config.
-	// false = not yet implemented (always returns mock regardless of config).
 	briefing.IntegrationAvailable = map[string]bool{
 		"weather":  true,
 		"news":     true,
-		"calendar": true,  // iCal URL subscription supported
-		"email":    false, // Gmail/IMAP not yet implemented
-		"slack":    false, // Slack API not yet implemented
+		"calendar": true, // iCal URL or Google OAuth
+		"email":    true, // Gmail OAuth or IMAP
+		"slack":    true, // Slack Web API
 		"github":   true,
 		"jira":     true,
 		"notion":   true,

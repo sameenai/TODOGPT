@@ -529,3 +529,35 @@ func TestFetchAllWithAISummaryError(t *testing.T) {
 		t.Errorf("expected empty summary on AI error, got %q", briefing.Summary)
 	}
 }
+
+func TestExportSetClaudeAPIURL(t *testing.T) {
+	orig := ExportClaudeAPIURL()
+	SetClaudeAPIURL("http://test-override")
+	if got := ExportClaudeAPIURL(); got != "http://test-override" {
+		t.Errorf("expected http://test-override, got %q", got)
+	}
+	SetClaudeAPIURL(orig)
+}
+
+func TestParseTimeBlocksValidJSONInvalidContent(t *testing.T) {
+	// Has [ and ] but content is not valid TimeBlock JSON — triggers json.Unmarshal error
+	_, err := parseTimeBlocks(`[{"start": invalid_value}]`)
+	if err == nil {
+		t.Error("expected error for invalid JSON content")
+	}
+}
+
+func TestBuildPromptWithMultipleEvents(t *testing.T) {
+	b := &models.Briefing{
+		Date: time.Now(),
+		Events: []models.CalendarEvent{
+			{Title: "Standup", StartTime: time.Now()},
+			{Title: "Review", StartTime: time.Now().Add(time.Hour)},
+		},
+	}
+	prompt := buildPrompt(b)
+	// With 2 events (<=3), we get the parenthesized list with ", " separator
+	if !strings.Contains(prompt, "Standup") || !strings.Contains(prompt, "Review") {
+		t.Error("expected both event titles in prompt")
+	}
+}

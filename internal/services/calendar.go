@@ -2,6 +2,7 @@ package services
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,8 +15,12 @@ import (
 	"github.com/todogpt/daily-briefing/internal/models"
 )
 
+// googleCalendarBaseURL is a package-level variable so tests can override it.
+var googleCalendarBaseURL = "https://www.googleapis.com/calendar/v3"
+
 type CalendarService struct {
 	cfg   config.GoogleConfig
+	auth  *GoogleAuthService // nil when OAuth is not configured
 	cache []models.CalendarEvent
 	mu    sync.RWMutex
 }
@@ -24,10 +29,35 @@ func NewCalendarService(cfg config.GoogleConfig) *CalendarService {
 	return &CalendarService{cfg: cfg}
 }
 
-// IsLive returns true when an iCal subscription URL is configured.
-func (s *CalendarService) IsLive() bool { return s.cfg.ICalURL != "" }
+// NewCalendarServiceWithAuth creates a CalendarService that can use the Google
+// Calendar API when the GoogleAuthService has a valid token.
+func NewCalendarServiceWithAuth(cfg config.GoogleConfig, auth *GoogleAuthService) *CalendarService {
+	return &CalendarService{cfg: cfg, auth: auth}
+}
+
+// IsLive returns true when either Google OAuth is connected or an iCal URL is configured.
+func (s *CalendarService) IsLive() bool {
+	return (s.auth != nil && s.auth.IsConnected()) || s.cfg.ICalURL != ""
+}
 
 func (s *CalendarService) Fetch() ([]models.CalendarEvent, error) {
+	// Prefer Google Calendar API when OAuth is connected.
+	if s.auth != nil && s.auth.IsConnected() {
+		events, err := s.fetchGoogleCalendar(s.auth.Client())
+		if err != nil {
+			cached := s.GetCached()
+			if len(cached) > 0 {
+				return cached, nil
+			}
+			// Fall through to iCal if available
+		} else {
+			s.mu.Lock()
+			s.cache = events
+			s.mu.Unlock()
+			return events, nil
+		}
+	}
+
 	if s.cfg.ICalURL == "" {
 		return nil, nil
 	}
@@ -49,6 +79,115 @@ func (s *CalendarService) GetCached() []models.CalendarEvent {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cache
+}
+
+// ── Google Calendar REST API ───────────────────────────────────────────────────
+
+type gcalEventsResp struct {
+	Items []gcalEvent `json:"items"`
+	Error *gcalError  `json:"error"`
+}
+
+type gcalError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+type gcalEvent struct {
+	ID          string       `json:"id"`
+	Summary     string       `json:"summary"`
+	Description string       `json:"description"`
+	Location    string       `json:"location"`
+	Start       gcalDateTime `json:"start"`
+	End         gcalDateTime `json:"end"`
+	HangoutLink string       `json:"hangoutLink"`
+	Attendees   []gcalAttend `json:"attendees"`
+}
+
+type gcalDateTime struct {
+	DateTime string `json:"dateTime"`
+	Date     string `json:"date"` // all-day events
+	TimeZone string `json:"timeZone"`
+}
+
+type gcalAttend struct {
+	Email       string `json:"email"`
+	DisplayName string `json:"displayName"`
+}
+
+func (s *CalendarService) fetchGoogleCalendar(client *http.Client) ([]models.CalendarEvent, error) {
+	if client == nil {
+		return nil, fmt.Errorf("no authenticated client")
+	}
+
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	todayEnd := todayStart.Add(24 * time.Hour)
+
+	url := fmt.Sprintf(
+		"%s/calendars/primary/events?timeMin=%s&timeMax=%s&singleEvents=true&orderBy=startTime&maxResults=20",
+		googleCalendarBaseURL,
+		todayStart.UTC().Format(time.RFC3339),
+		todayEnd.UTC().Format(time.RFC3339),
+	)
+
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("google calendar request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var parsed gcalEventsResp
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return nil, fmt.Errorf("google calendar decode: %w", err)
+	}
+	if parsed.Error != nil {
+		return nil, fmt.Errorf("google calendar API error %d: %s", parsed.Error.Code, parsed.Error.Message)
+	}
+
+	var events []models.CalendarEvent
+	for _, item := range parsed.Items {
+		var startTime, endTime time.Time
+		allDay := false
+
+		if item.Start.DateTime != "" {
+			startTime, _ = time.Parse(time.RFC3339, item.Start.DateTime)
+		} else if item.Start.Date != "" {
+			startTime, _ = time.ParseInLocation("2006-01-02", item.Start.Date, now.Location())
+			allDay = true
+		}
+		if item.End.DateTime != "" {
+			endTime, _ = time.Parse(time.RFC3339, item.End.DateTime)
+		} else if item.End.Date != "" {
+			endTime, _ = time.ParseInLocation("2006-01-02", item.End.Date, now.Location())
+		}
+		if startTime.IsZero() {
+			continue
+		}
+
+		var attendees []string
+		for _, a := range item.Attendees {
+			name := a.DisplayName
+			if name == "" {
+				name = a.Email
+			}
+			attendees = append(attendees, name)
+		}
+
+		events = append(events, models.CalendarEvent{
+			ID:          item.ID,
+			Title:       item.Summary,
+			Description: item.Description,
+			Location:    item.Location,
+			StartTime:   startTime,
+			EndTime:     endTime,
+			AllDay:      allDay,
+			MeetingURL:  item.HangoutLink,
+			Attendees:   attendees,
+			Source:      "google",
+		})
+	}
+	return events, nil
 }
 
 func (s *CalendarService) fetchICalEvents() ([]models.CalendarEvent, error) {

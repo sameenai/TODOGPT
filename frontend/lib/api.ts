@@ -81,3 +81,23 @@ export async function fetchTimeBlocks(): Promise<TimeBlock[]> {
   const data: { blocks: TimeBlock[] } = await res.json();
   return data.blocks;
 }
+
+export interface AuthStatus {
+  google: { configured: boolean; connected: boolean };
+}
+
+export async function fetchAuthStatus(): Promise<AuthStatus> {
+  const res = await fetch(`${BASE}/auth/status`);
+  if (!res.ok) throw new Error('Failed to fetch auth status');
+  return res.json();
+}
+
+export function googleAuthURL(): string {
+  const returnTo = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${BASE}/auth/google?return_to=${encodeURIComponent(returnTo)}`;
+}
+
+export async function disconnectGoogle(): Promise<void> {
+  const res = await fetch(`${BASE}/auth/google/disconnect`, { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to disconnect Google');
+}
