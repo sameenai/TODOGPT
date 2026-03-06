@@ -47,13 +47,41 @@ The backend also serves a plain HTML dashboard at **http://localhost:8080** if y
 
 ## Configuring integrations
 
-Generate a config file:
+Credentials can be set via **environment variables** (recommended — nothing sensitive on disk) or written directly into `~/.daily-briefing/config.json`. Env vars always win when both are present.
+
+```bash
+# Quickstart — export whichever you have and run:
+export GITHUB_TOKEN=ghp_...
+export ANTHROPIC_API_KEY=sk-ant-...
+export GOOGLE_CLIENT_ID=...apps.googleusercontent.com
+export GOOGLE_CLIENT_SECRET=GOCSPX-...
+export ICAL_URL=https://calendar.google.com/calendar/ical/.../basic.ics
+export SLACK_BOT_TOKEN=xoxb-...
+export NOTION_TOKEN=secret_...
+export JIRA_API_TOKEN=...
+make run
+```
+
+Add these to your shell profile (`.zshrc` / `.bashrc`) or a local `.env` file (sourced via `direnv`) to make them permanent.
+
+| Environment variable  | Maps to config key       | Auto-enables integration |
+|-----------------------|--------------------------|--------------------------|
+| `GITHUB_TOKEN`        | `github.token`           | ✅ yes                   |
+| `ANTHROPIC_API_KEY`   | `ai.api_key`             | ✅ yes                   |
+| `SLACK_BOT_TOKEN`     | `slack.bot_token`        | —                        |
+| `NOTION_TOKEN`        | `notion.token`           | —                        |
+| `JIRA_API_TOKEN`      | `jira.api_token`         | —                        |
+| `GOOGLE_CLIENT_ID`    | `google.client_id`       | —                        |
+| `GOOGLE_CLIENT_SECRET`| `google.client_secret`   | —                        |
+| `ICAL_URL`            | `google.ical_url`        | —                        |
+
+Alternatively, generate the config file and edit it manually:
 ```bash
 make init
 # Creates ~/.daily-briefing/config.json
 ```
 
-Then follow the steps below for each integration you want to connect. After editing the config, restart the Go backend (`make run`).
+Follow the steps below for each integration. After adding credentials, restart the Go backend (`make run`).
 
 ### Calendar (Google Calendar, iCloud, Outlook)
 
