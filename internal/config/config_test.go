@@ -290,6 +290,96 @@ func TestSaveMkdirAllError(t *testing.T) {
 	}
 }
 
+func TestApplyEnvOverrides(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "ghp_envtest")
+	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-envtest")
+	t.Setenv("SLACK_BOT_TOKEN", "xoxb-envtest")
+	t.Setenv("NOTION_TOKEN", "secret_envtest")
+	t.Setenv("JIRA_API_TOKEN", "jira-envtest")
+	t.Setenv("GOOGLE_CLIENT_ID", "gcid-envtest")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "gcsec-envtest")
+	t.Setenv("ICAL_URL", "https://example.com/cal.ics")
+
+	cfg := DefaultConfig()
+	applyEnvOverrides(cfg)
+
+	if cfg.GitHub.Token != "ghp_envtest" {
+		t.Errorf("GITHUB_TOKEN: got %q", cfg.GitHub.Token)
+	}
+	if !cfg.GitHub.Enabled {
+		t.Error("GITHUB_TOKEN should auto-enable GitHub")
+	}
+	if cfg.AI.APIKey != "sk-ant-envtest" {
+		t.Errorf("ANTHROPIC_API_KEY: got %q", cfg.AI.APIKey)
+	}
+	if !cfg.AI.Enabled {
+		t.Error("ANTHROPIC_API_KEY should auto-enable AI")
+	}
+	if cfg.Slack.BotToken != "xoxb-envtest" {
+		t.Errorf("SLACK_BOT_TOKEN: got %q", cfg.Slack.BotToken)
+	}
+	if cfg.Notion.Token != "secret_envtest" {
+		t.Errorf("NOTION_TOKEN: got %q", cfg.Notion.Token)
+	}
+	if cfg.Jira.Token != "jira-envtest" {
+		t.Errorf("JIRA_API_TOKEN: got %q", cfg.Jira.Token)
+	}
+	if cfg.Google.ClientID != "gcid-envtest" {
+		t.Errorf("GOOGLE_CLIENT_ID: got %q", cfg.Google.ClientID)
+	}
+	if cfg.Google.ClientSecret != "gcsec-envtest" {
+		t.Errorf("GOOGLE_CLIENT_SECRET: got %q", cfg.Google.ClientSecret)
+	}
+	if cfg.Google.ICalURL != "https://example.com/cal.ics" {
+		t.Errorf("ICAL_URL: got %q", cfg.Google.ICalURL)
+	}
+}
+
+func TestEnvOverridesAppliedOnLoad(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("GITHUB_TOKEN", "ghp_from_env")
+
+	// Load with no config file — env override should still apply.
+	cfg, err := Load(filepath.Join(dir, "nonexistent.json"))
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if cfg.GitHub.Token != "ghp_from_env" {
+		t.Errorf("env override not applied on missing config: got %q", cfg.GitHub.Token)
+	}
+}
+
+func TestEnvOverridesTakePrecedenceOverFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	os.WriteFile(path, []byte(`{"github":{"token":"file-token","enabled":true}}`), 0600) //nolint:errcheck
+	t.Setenv("GITHUB_TOKEN", "env-token")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if cfg.GitHub.Token != "env-token" {
+		t.Errorf("expected env-token to win over file, got %q", cfg.GitHub.Token)
+	}
+}
+
+func TestEnvOverridesEmptyVarsNoOp(t *testing.T) {
+	// Explicitly unset so we don't inherit from the test runner environment.
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
+	cfg := DefaultConfig()
+	applyEnvOverrides(cfg)
+
+	if cfg.GitHub.Token != "" {
+		t.Errorf("empty GITHUB_TOKEN should not overwrite: got %q", cfg.GitHub.Token)
+	}
+	if cfg.GitHub.Enabled {
+		t.Error("empty GITHUB_TOKEN should not enable GitHub")
+	}
+}
+
 func TestConfigPartialOverride(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "partial.json")

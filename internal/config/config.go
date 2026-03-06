@@ -6,6 +6,49 @@ import (
 	"path/filepath"
 )
 
+// applyEnvOverrides merges standard environment variables into cfg.
+// Env vars take precedence over the config file and auto-enable the
+// corresponding integration when a credential is supplied.
+//
+// Supported variables:
+//
+//	GITHUB_TOKEN          → github.token  (enables GitHub)
+//	ANTHROPIC_API_KEY     → ai.api_key    (enables AI summary)
+//	SLACK_BOT_TOKEN       → slack.bot_token
+//	NOTION_TOKEN          → notion.token
+//	JIRA_API_TOKEN        → jira.api_token
+//	GOOGLE_CLIENT_ID      → google.client_id  (enables Google OAuth)
+//	GOOGLE_CLIENT_SECRET  → google.client_secret
+//	ICAL_URL              → google.ical_url
+func applyEnvOverrides(cfg *Config) {
+	if v := os.Getenv("GITHUB_TOKEN"); v != "" {
+		cfg.GitHub.Token = v
+		cfg.GitHub.Enabled = true
+	}
+	if v := os.Getenv("ANTHROPIC_API_KEY"); v != "" {
+		cfg.AI.APIKey = v
+		cfg.AI.Enabled = true
+	}
+	if v := os.Getenv("SLACK_BOT_TOKEN"); v != "" {
+		cfg.Slack.BotToken = v
+	}
+	if v := os.Getenv("NOTION_TOKEN"); v != "" {
+		cfg.Notion.Token = v
+	}
+	if v := os.Getenv("JIRA_API_TOKEN"); v != "" {
+		cfg.Jira.Token = v
+	}
+	if v := os.Getenv("GOOGLE_CLIENT_ID"); v != "" {
+		cfg.Google.ClientID = v
+	}
+	if v := os.Getenv("GOOGLE_CLIENT_SECRET"); v != "" {
+		cfg.Google.ClientSecret = v
+	}
+	if v := os.Getenv("ICAL_URL"); v != "" {
+		cfg.Google.ICalURL = v
+	}
+}
+
 type Config struct {
 	Server   ServerConfig   `json:"server"`
 	Weather  WeatherConfig  `json:"weather"`
@@ -162,6 +205,7 @@ func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path) // #nosec G304 -- path is user-supplied config file location
 	if err != nil {
 		if os.IsNotExist(err) {
+			applyEnvOverrides(cfg)
 			return cfg, nil
 		}
 		return nil, err
@@ -171,6 +215,7 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
+	applyEnvOverrides(cfg)
 	return cfg, nil
 }
 
