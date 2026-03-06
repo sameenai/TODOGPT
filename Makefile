@@ -21,7 +21,7 @@ build:
 	go build -o bin/tui      ./cmd/tui
 
 run: build
-	./bin/server
+	./bin/server -debug
 
 briefing: build
 	./bin/briefing

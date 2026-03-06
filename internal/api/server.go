@@ -24,6 +24,7 @@ type Server struct {
 	port    int
 	host    string
 	cfgPath string // path used when saving config; "" = default ~/.daily-briefing/config.json
+	debug   bool
 }
 
 func NewServer(hub *services.Hub, host string, port int) *Server {
@@ -41,6 +42,11 @@ func NewServer(hub *services.Hub, host string, port int) *Server {
 // SetConfigPath sets the config file path used by PUT /api/config.
 func (s *Server) SetConfigPath(path string) {
 	s.cfgPath = path
+}
+
+// SetDebug enables verbose request logging for local development.
+func (s *Server) SetDebug(enabled bool) {
+	s.debug = enabled
 }
 
 func (s *Server) registerRoutes() {
@@ -82,6 +88,15 @@ func (s *Server) Handler() http.Handler {
 	return s.withCORS(s.mux)
 }
 
+// handler returns the full middleware-wrapped handler for production use.
+func (s *Server) handler() http.Handler {
+	h := s.withCORS(s.mux)
+	if s.debug {
+		h = s.withDebugLogging(h)
+	}
+	return h
+}
+
 func (s *Server) Start() error {
 	// Start WebSocket hub
 	go s.wsHub.Run()
@@ -93,7 +108,7 @@ func (s *Server) Start() error {
 	log.Printf("Dashboard running at http://%s", addr)
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      s.withCORS(s.mux),
+		Handler:      s.handler(),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -121,6 +136,13 @@ func (s *Server) withCORS(next http.Handler) http.Handler {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) withDebugLogging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("[debug] %s %s", r.Method, r.URL.Path)
 		next.ServeHTTP(w, r)
 	})
 }

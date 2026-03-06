@@ -22,9 +22,15 @@ func run(args []string) error {
 	configPath := fs.String("config", "", "Path to config file")
 	port := fs.Int("port", 0, "Override server port")
 	initConfig := fs.Bool("init", false, "Generate default config file")
+	debug := fs.Bool("debug", false, "Enable debug logging (timestamps, file:line, request logs)")
 
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	if *debug {
+		log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+		log.Println("[debug] Debug logging enabled")
 	}
 
 	if *initConfig {
@@ -52,6 +58,9 @@ func run(args []string) error {
 
 	server := api.NewServer(hub, cfg.Server.Host, cfg.Server.Port)
 	server.SetConfigPath(*configPath)
+	if *debug {
+		server.SetDebug(true)
+	}
 
 	log.Printf("Starting Daily Briefing Dashboard...")
 	log.Printf("Open http://%s:%d in your browser", cfg.Server.Host, cfg.Server.Port)
