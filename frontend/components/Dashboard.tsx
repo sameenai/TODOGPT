@@ -30,12 +30,22 @@ interface Props {
   initialBriefing: Briefing | null;
 }
 
+const DEMO_INTEGRATION_LABELS: Record<string, string> = {
+  calendar: 'Calendar',
+  github: 'GitHub',
+  jira: 'Jira',
+  notion: 'Notion',
+  email: 'Email',
+  slack: 'Slack',
+};
+
 export function Dashboard({ initialBriefing }: Props) {
   const [briefing, setBriefing] = useState<Briefing | null>(initialBriefing);
   const [wsConnected, setWsConnected] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useWebSocket(
     WS_URL,
@@ -104,6 +114,37 @@ export function Dashboard({ initialBriefing }: Props) {
       </div>
 
       <main className="max-w-[1600px] mx-auto px-4 py-4">
+        {/* Demo data warning banner */}
+        {!bannerDismissed && (() => {
+          const statuses = briefing.integration_statuses ?? {};
+          const demoIntegrations = Object.keys(DEMO_INTEGRATION_LABELS).filter(k => !statuses[k as keyof typeof statuses]);
+          if (demoIntegrations.length === 0) return null;
+          return (
+            <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+              <span className="mt-0.5 text-base leading-none">⚠</span>
+              <div className="flex-1">
+                <span className="font-semibold text-amber-200">Sample data shown</span>
+                {' — '}
+                <span className="font-medium">{demoIntegrations.map(k => DEMO_INTEGRATION_LABELS[k]).join(', ')}</span>
+                {demoIntegrations.length === 1 ? ' is' : ' are'} not connected. Numbers and content for {demoIntegrations.length === 1 ? 'this integration are' : 'these integrations are'} placeholder data, not your real information.{' '}
+                <button
+                  onClick={() => setSettingsOpen(true)}
+                  className="underline underline-offset-2 hover:text-amber-100 transition-colors"
+                >
+                  Connect in Settings
+                </button>
+              </div>
+              <button
+                onClick={() => setBannerDismissed(true)}
+                className="text-amber-400/60 hover:text-amber-200 transition-colors text-base leading-none"
+                aria-label="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+          );
+        })()}
+
         <ScoreRow briefing={briefing} />
 
         {briefing.summary && <SummaryBanner summary={briefing.summary} />}
