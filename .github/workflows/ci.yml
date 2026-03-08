@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ["1.23", "1.24"]
+        go-version: ["1.25", "1.26"]
 
     steps:
       - name: Checkout code
@@ -46,7 +46,7 @@ jobs:
         run: go test -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Upload coverage
-        if: matrix.go-version == '1.23'
+        if: matrix.go-version == '1.26'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
@@ -64,7 +64,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.26"
 
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -72,7 +72,7 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: ${{ runner.os }}-go-1.23-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-1.26-${{ hashFiles('**/go.sum') }}
 
       - name: Build briefing CLI
         run: go build -o bin/briefing ./cmd/briefing
@@ -102,7 +102,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.26"
 
       - name: Run go vet
         run: go vet ./...
@@ -133,9 +133,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.26"
 
       - name: Run govulncheck
         uses: golang/govulncheck-action@v1
         with:
-          go-version-input: "1.24"
+          go-version-input: "1.26"
