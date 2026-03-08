@@ -88,4 +88,11 @@ git branch -d claude/<description>
 git push origin --delete claude/<description>
 ```
 
-Always run `make ci` (and `make audit` for security-relevant changes) before committing. Update `CLAUDE.md` whenever new commands, architectural patterns, or workflow conventions are established.
+### Commit quality standards
+
+- **Always run `make ci` before opening a PR.** For security-relevant changes also run `make audit`. The PR must not be created if CI fails.
+- **Commits must be modular, small, and digestible** — each commit should represent one logical change that can be reviewed, tested, and reverted in isolation. Avoid bundling unrelated changes.
+- **Tests must accompany every change** that adds or modifies behaviour. New Go code requires tests that keep coverage at ≥ 95%. New frontend components should have at minimum happy-path and error-state tests.
+- **High code quality is non-negotiable**: no dead code, no silenced linter warnings without a comment explaining why, no unchecked errors in hot paths.
+
+Update `CLAUDE.md` whenever new commands, architectural patterns, or workflow conventions are established.
