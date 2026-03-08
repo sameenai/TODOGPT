@@ -140,6 +140,7 @@ export interface Briefing {
   generated_at: string;
   integration_statuses: Record<string, boolean>;
   integration_available: Record<string, boolean>;
+  integration_errors?: Record<string, string>;
 }
 
 export interface DashboardUpdate {

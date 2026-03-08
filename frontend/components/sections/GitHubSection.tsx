@@ -2,8 +2,9 @@ import type { GitHubNotification } from '@/lib/types';
 import { timeAgo } from '@/lib/utils';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ConnectPrompt } from '@/components/ConnectPrompt';
+import { FetchErrorBanner } from '@/components/FetchErrorBanner';
 
-export function GitHubSection({ notifications, isLive }: { notifications: GitHubNotification[]; isLive?: boolean }) {
+export function GitHubSection({ notifications, isLive, fetchError }: { notifications: GitHubNotification[]; isLive?: boolean; fetchError?: string }) {
   const unread = notifications?.filter(n => n.unread) ?? [];
 
   return (
@@ -12,6 +13,7 @@ export function GitHubSection({ notifications, isLive }: { notifications: GitHub
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">GitHub</h3>
         <div className="flex items-center gap-2">
           <StatusBadge live={isLive} />
+          {isLive && fetchError && <FetchErrorBanner error={fetchError} />}
           {isLive && (
             <span className="text-xs font-bold bg-gray-800 text-gray-300 px-2 py-0.5 rounded">
               {unread.length}

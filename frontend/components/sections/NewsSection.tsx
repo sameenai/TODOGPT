@@ -1,15 +1,19 @@
 import type { NewsItem } from '@/lib/types';
 import { timeAgo } from '@/lib/utils';
 import { StatusBadge } from '@/components/StatusBadge';
+import { FetchErrorBanner } from '@/components/FetchErrorBanner';
 
-export function NewsSection({ news, isLive }: { news: NewsItem[]; isLive?: boolean }) {
+export function NewsSection({ news, isLive, fetchError }: { news: NewsItem[]; isLive?: boolean; fetchError?: string }) {
   if (!news?.length) return null;
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden mb-4">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Top News</h3>
-        <StatusBadge live={isLive} />
+        <div className="flex items-center gap-2">
+          <StatusBadge live={isLive} />
+          {isLive && fetchError && <FetchErrorBanner error={fetchError} />}
+        </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-x divide-y divide-gray-800">
         {news.slice(0, 8).map((item, i) => (
