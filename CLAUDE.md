@@ -70,6 +70,8 @@ The app has three binaries sharing the same `internal/` packages:
 
 ## Git workflow
 
+**NEVER commit directly to `main`.** Every change — no matter how small — must go through a separate branch, commit, and PR. Use the squash merge method when merging via the GitHub MCP tool.
+
 Branch naming: `claude/<short-description>` (e.g. `claude/tui-security-audit-coverage`)
 
 Standard flow:
