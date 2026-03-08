@@ -1,6 +1,7 @@
 import type { JiraTicket } from '@/lib/types';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ConnectPrompt } from '@/components/ConnectPrompt';
+import { FetchErrorBanner } from '@/components/FetchErrorBanner';
 
 const PRIORITY_COLOR: Record<string, string> = {
   urgent: 'text-red-400',
@@ -9,13 +10,14 @@ const PRIORITY_COLOR: Record<string, string> = {
   low: 'text-gray-400',
 };
 
-export function JiraSection({ tickets, isLive }: { tickets: JiraTicket[]; isLive?: boolean }) {
+export function JiraSection({ tickets, isLive, fetchError }: { tickets: JiraTicket[]; isLive?: boolean; fetchError?: string }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Jira</h3>
         <div className="flex items-center gap-2">
           <StatusBadge live={isLive} />
+          {isLive && fetchError && <FetchErrorBanner error={fetchError} />}
           {isLive && (
             <span className="text-xs font-bold bg-gray-800 text-gray-300 px-2 py-0.5 rounded">
               {tickets?.length ?? 0}

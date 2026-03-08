@@ -2,11 +2,13 @@ import type { EmailMessage } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import { StatusBadge } from '@/components/StatusBadge';
 import { NotAvailable } from '@/components/ConnectPrompt';
+import { FetchErrorBanner } from '@/components/FetchErrorBanner';
 
-export function EmailSection({ emails, isLive, isAvailable }: {
+export function EmailSection({ emails, isLive, isAvailable, fetchError }: {
   emails: EmailMessage[];
   isLive?: boolean;
   isAvailable?: boolean;
+  fetchError?: string;
 }) {
   const unread = emails?.filter(e => e.is_unread) ?? [];
 
@@ -16,6 +18,7 @@ export function EmailSection({ emails, isLive, isAvailable }: {
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Email</h3>
         <div className="flex items-center gap-2">
           <StatusBadge live={isLive} />
+          {isLive && fetchError && <FetchErrorBanner error={fetchError} />}
           {isLive && (
             <span className={`text-xs font-bold px-2 py-0.5 rounded ${
               unread.length > 0 ? 'bg-red-900 text-red-300' : 'bg-green-900 text-green-300'

@@ -149,18 +149,19 @@ export function Dashboard({ initialBriefing }: Props) {
 
         {briefing.summary && <SummaryBanner summary={briefing.summary} />}
 
-        <NewsSection news={briefing.news} isLive={briefing.integration_statuses?.news} />
+        <NewsSection news={briefing.news} isLive={briefing.integration_statuses?.news} fetchError={briefing.integration_errors?.news} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
           {/* Column 1: Weather · Calendar · Notion */}
           <div className="space-y-4">
-            <WeatherSection weather={briefing.weather} isLive={briefing.integration_statuses?.weather} />
+            <WeatherSection weather={briefing.weather} isLive={briefing.integration_statuses?.weather} fetchError={briefing.integration_errors?.weather} />
             <CalendarSection
               events={briefing.events}
               isLive={briefing.integration_statuses?.calendar}
               isAvailable={briefing.integration_available?.calendar}
+              fetchError={briefing.integration_errors?.calendar}
             />
-            <NotionSection pages={briefing.notion_pages} isLive={briefing.integration_statuses?.notion} />
+            <NotionSection pages={briefing.notion_pages} isLive={briefing.integration_statuses?.notion} fetchError={briefing.integration_errors?.notion} />
           </div>
 
           {/* Column 2: Email · Slack · GitHub · Jira */}
@@ -169,14 +170,16 @@ export function Dashboard({ initialBriefing }: Props) {
               emails={briefing.unread_emails}
               isLive={briefing.integration_statuses?.email}
               isAvailable={briefing.integration_available?.email}
+              fetchError={briefing.integration_errors?.email}
             />
             <SlackSection
               messages={briefing.slack_messages}
               isLive={briefing.integration_statuses?.slack}
               isAvailable={briefing.integration_available?.slack}
+              fetchError={briefing.integration_errors?.slack}
             />
-            <GitHubSection notifications={briefing.github_notifications} isLive={briefing.integration_statuses?.github} />
-            <JiraSection tickets={briefing.jira_tickets} isLive={briefing.integration_statuses?.jira} />
+            <GitHubSection notifications={briefing.github_notifications} isLive={briefing.integration_statuses?.github} fetchError={briefing.integration_errors?.github} />
+            <JiraSection tickets={briefing.jira_tickets} isLive={briefing.integration_statuses?.jira} fetchError={briefing.integration_errors?.jira} />
           </div>
 
           {/* Column 3: Inbox Zero · Pomodoro · Time Blocking · Todos */}

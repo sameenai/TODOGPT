@@ -212,6 +212,8 @@ type Briefing struct {
 	// IntegrationAvailable maps integration name → true when real API code exists and
 	// it can be made live by adding credentials to config. False means not yet implemented.
 	IntegrationAvailable map[string]bool `json:"integration_available"`
+	// IntegrationErrors holds the last fetch error message per integration (live integrations only).
+	IntegrationErrors map[string]string `json:"integration_errors,omitempty"`
 }
 
 // DashboardUpdate is sent over WebSocket for real-time updates.

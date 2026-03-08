@@ -1,12 +1,16 @@
 import type { Weather } from '@/lib/types';
 import { StatusBadge } from '@/components/StatusBadge';
+import { FetchErrorBanner } from '@/components/FetchErrorBanner';
 
-export function WeatherSection({ weather, isLive }: { weather: Weather | undefined; isLive?: boolean }) {
+export function WeatherSection({ weather, isLive, fetchError }: { weather: Weather | undefined; isLive?: boolean; fetchError?: string }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Weather</h3>
-        <StatusBadge live={isLive} />
+        <div className="flex items-center gap-2">
+          <StatusBadge live={isLive} />
+          {isLive && fetchError && <FetchErrorBanner error={fetchError} />}
+        </div>
       </div>
       {weather ? (
         <div className="flex items-center gap-4">
