@@ -86,7 +86,12 @@ export function Dashboard({ initialBriefing }: Props) {
   if (!briefing) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-gray-500 text-lg animate-pulse">Loading briefing&hellip;</div>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-cyan-700 flex items-center justify-center">
+            <span className="text-white text-sm font-bold">B</span>
+          </div>
+          <div className="text-gray-600 text-sm animate-pulse">Loading briefing&hellip;</div>
+        </div>
       </div>
     );
   }
@@ -99,14 +104,14 @@ export function Dashboard({ initialBriefing }: Props) {
       <div className="max-w-[1600px] mx-auto px-4 pt-3 flex gap-2 justify-end">
         <button
           onClick={() => setReviewOpen(true)}
-          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-gray-900 hover:bg-gray-800 border border-gray-800 px-3 py-1.5 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+          className="btn-ghost"
           aria-label="Open end-of-day review"
         >
           🌅 <span>Daily Review</span>
         </button>
         <button
           onClick={() => setSettingsOpen(true)}
-          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-gray-900 hover:bg-gray-800 border border-gray-800 px-3 py-1.5 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+          className="btn-ghost"
           aria-label="Open settings"
         >
           ⚙️ <span>Settings</span>

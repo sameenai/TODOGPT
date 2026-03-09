@@ -8,39 +8,39 @@ export function GitHubSection({ notifications, isLive, fetchError }: { notificat
   const unread = notifications?.filter(n => n.unread) ?? [];
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">GitHub</h3>
+    <div className="panel">
+      <div className="panel-header">
+        <h3 className="section-title">GitHub</h3>
         <div className="flex items-center gap-2">
           <StatusBadge live={isLive} />
           {isLive && fetchError && <FetchErrorBanner error={fetchError} />}
           {isLive && (
-            <span className="text-xs font-bold bg-gray-800 text-gray-300 px-2 py-0.5 rounded">
+            <span className="text-xs font-bold bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full tabular-nums">
               {unread.length}
             </span>
           )}
         </div>
       </div>
       {isLive ? (
-        <div className="divide-y divide-gray-800">
+        <div className="divide-y divide-gray-800/80">
           {!unread.length ? (
-            <div className="px-4 py-6 text-center text-green-400 text-sm">No unread notifications</div>
+            <div className="px-4 py-6 text-center text-emerald-400/80 text-sm">No unread notifications</div>
           ) : unread.slice(0, 5).map(n => (
             <a
               key={n.id}
               href={n.url || '#'}
               target="_blank"
               rel="noopener noreferrer"
-              className="block px-4 py-3 hover:bg-gray-800 transition-colors"
+              className="block px-4 py-3 hover:bg-gray-800/40 transition-colors group"
             >
               <div className="flex items-start gap-2">
-                <span className="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0 font-mono">
+                <span className="text-xs bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0 font-mono">
                   {n.type === 'PullRequest' ? 'PR' : n.type === 'Issue' ? 'IS' : n.type.slice(0, 2).toUpperCase()}
                 </span>
                 <div className="min-w-0">
-                  <div className="text-sm text-gray-100 truncate">{n.title}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    {n.repo} &middot; {n.reason} &middot; {timeAgo(n.updated_at)}
+                  <div className="text-sm text-gray-200 group-hover:text-white truncate transition-colors">{n.title}</div>
+                  <div className="text-xs text-gray-600 mt-0.5">
+                    {n.repo}&nbsp;&middot;&nbsp;{n.reason}&nbsp;&middot;&nbsp;{timeAgo(n.updated_at)}
                   </div>
                 </div>
               </div>
