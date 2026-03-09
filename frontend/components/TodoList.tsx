@@ -97,11 +97,11 @@ export function TodoList({ todos, onTodosChange }: Props) {
   ];
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Action Items</h3>
-        <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-          pendingCount > 0 ? 'bg-red-900 text-red-300' : 'bg-green-900 text-green-300'
+    <div className="panel">
+      <div className="panel-header">
+        <h3 className="section-title">Action Items</h3>
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${
+          pendingCount > 0 ? 'bg-rose-950/60 text-rose-300 border border-rose-800/40' : 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/40'
         }`}>
           {pendingCount}
         </span>
@@ -114,26 +114,28 @@ export function TodoList({ todos, onTodosChange }: Props) {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleAdd()}
-          placeholder="Add a task..."
-          className="flex-1 bg-gray-800 text-gray-100 placeholder-gray-500 text-sm px-3 py-2 rounded border border-gray-700 focus:outline-none focus:border-cyan-500"
+          placeholder="Add a task…"
+          className="flex-1 bg-gray-800/80 text-gray-100 placeholder-gray-600 text-sm px-3 py-2 rounded-lg border border-gray-700/60 focus:outline-none focus:border-cyan-500/60 transition-colors"
         />
         <button
           onClick={handleAdd}
           disabled={adding || !input.trim()}
-          className="px-3 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-medium rounded disabled:opacity-50 transition-colors"
+          className="px-3 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-semibold rounded-lg disabled:opacity-40 transition-colors"
         >
           Add
         </button>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-1 p-2 border-b border-gray-800">
+      <div className="flex gap-1 px-3 py-2 border-b border-gray-800">
         {FILTERS.map(f => (
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className={`text-xs px-2 py-1 rounded transition-colors ${
-              filter === f.key ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-gray-200'
+            className={`text-xs px-2.5 py-1 rounded-full transition-colors font-medium ${
+              filter === f.key
+                ? 'bg-cyan-600 text-white'
+                : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
             }`}
           >
             {f.label}
@@ -142,43 +144,43 @@ export function TodoList({ todos, onTodosChange }: Props) {
       </div>
 
       {/* List */}
-      <div className="overflow-y-auto max-h-96 divide-y divide-gray-800">
+      <div className="overflow-y-auto max-h-96 divide-y divide-gray-800/60">
         {filtered.length === 0 ? (
-          <div className="py-8 text-center text-gray-500 text-sm">
+          <div className="py-8 text-center text-gray-600 text-sm">
             {filter === 'done' ? 'No completed tasks.' : 'All clear!'}
           </div>
         ) : (
           filtered.map(todo => (
             <div
               key={todo.id}
-              className="flex items-start gap-3 px-4 py-3 hover:bg-gray-800/50 group transition-colors"
+              className="flex items-start gap-3 px-4 py-3 hover:bg-gray-800/40 group transition-colors"
             >
               {/* Checkbox */}
               <button
                 onClick={() => handleComplete(todo)}
-                className={`mt-0.5 w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center text-xs transition-colors ${
+                className={`mt-0.5 w-4 h-4 rounded-md border flex-shrink-0 flex items-center justify-center text-xs transition-all ${
                   todo.status === 2
-                    ? 'bg-green-500 border-green-500 text-white'
-                    : 'border-gray-600 hover:border-cyan-400'
+                    ? 'bg-emerald-500 border-emerald-500 text-white'
+                    : 'border-gray-600 hover:border-cyan-500'
                 }`}
               >
                 {todo.status === 2 && '\u2713'}
               </button>
 
               <div className="flex-1 min-w-0">
-                <div className={`text-sm ${todo.status === 2 ? 'line-through text-gray-500' : 'text-gray-100'}`}>
+                <div className={`text-sm leading-snug ${todo.status === 2 ? 'line-through text-gray-600' : 'text-gray-100'}`}>
                   {todo.title}
                 </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className={`text-xs ${PRIORITY_COLOR[todo.priority]}`}>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span className={`text-xs font-medium ${PRIORITY_COLOR[todo.priority]}`}>
                     {PRIORITY_LABEL[todo.priority]}
                   </span>
-                  <span className="text-xs text-gray-600">{todo.source}</span>
+                  <span className="text-xs text-gray-700">{todo.source}</span>
                   {todo.status === 1 && (
-                    <span className="text-xs text-yellow-400 font-medium">active</span>
+                    <span className="text-xs text-amber-400 font-medium">active</span>
                   )}
                   {todo.recurring?.enabled && (
-                    <span className="text-xs text-cyan-500 font-medium" title={`Recurs ${todo.recurring.frequency}`}>
+                    <span className="text-xs text-cyan-500/80 font-medium" title={`Recurs ${todo.recurring.frequency}`}>
                       ↻ {RECUR_LABELS[todo.recurring.frequency] ?? todo.recurring.frequency}
                     </span>
                   )}
@@ -186,10 +188,10 @@ export function TodoList({ todos, onTodosChange }: Props) {
               </div>
 
               {/* Hover actions */}
-              <div className="relative flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="relative flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => handleToggleActive(todo)}
-                  className="p-1 text-xs text-gray-400 hover:text-yellow-400 transition-colors"
+                  className="p-1.5 text-xs text-gray-600 hover:text-amber-400 transition-colors rounded"
                   title="Toggle active"
                   aria-label="Toggle active"
                 >
@@ -197,7 +199,9 @@ export function TodoList({ todos, onTodosChange }: Props) {
                 </button>
                 <button
                   onClick={() => setRecurringOpen(recurringOpen === todo.id ? null : todo.id)}
-                  className={`p-1 text-xs transition-colors ${todo.recurring?.enabled ? 'text-cyan-400 hover:text-cyan-300' : 'text-gray-400 hover:text-cyan-400'}`}
+                  className={`p-1.5 text-xs transition-colors rounded ${
+                    todo.recurring?.enabled ? 'text-cyan-400 hover:text-cyan-300' : 'text-gray-600 hover:text-cyan-400'
+                  }`}
                   title="Set recurrence"
                   aria-label="Set recurrence"
                 >
@@ -205,7 +209,7 @@ export function TodoList({ todos, onTodosChange }: Props) {
                 </button>
                 <button
                   onClick={() => handleDelete(todo.id)}
-                  className="p-1 text-xs text-gray-400 hover:text-red-400 transition-colors"
+                  className="p-1.5 text-xs text-gray-600 hover:text-rose-400 transition-colors rounded"
                   title="Delete"
                   aria-label="Delete todo"
                 >
@@ -214,13 +218,13 @@ export function TodoList({ todos, onTodosChange }: Props) {
 
                 {/* Recurrence dropdown */}
                 {recurringOpen === todo.id && (
-                  <div className="absolute right-0 top-6 z-10 w-32 bg-gray-800 border border-gray-700 rounded shadow-xl">
+                  <div className="absolute right-0 top-7 z-10 w-32 bg-gray-800 border border-gray-700/60 rounded-lg shadow-2xl overflow-hidden">
                     {(['daily', 'weekdays', 'weekly'] as const).map(freq => (
                       <button
                         key={freq}
                         onClick={() => handleSetRecurring(todo, freq)}
-                        className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-700 transition-colors ${
-                          todo.recurring?.frequency === freq && todo.recurring.enabled ? 'text-cyan-400' : 'text-gray-300'
+                        className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-700/60 transition-colors ${
+                          todo.recurring?.frequency === freq && todo.recurring.enabled ? 'text-cyan-400' : 'text-gray-400'
                         }`}
                       >
                         {RECUR_LABELS[freq]}
@@ -228,7 +232,7 @@ export function TodoList({ todos, onTodosChange }: Props) {
                     ))}
                     <button
                       onClick={() => handleSetRecurring(todo, null)}
-                      className="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-700 hover:text-gray-300 transition-colors border-t border-gray-700"
+                      className="w-full text-left px-3 py-2 text-xs text-gray-600 hover:bg-gray-700/60 hover:text-gray-300 transition-colors border-t border-gray-700/60"
                     >
                       None
                     </button>
