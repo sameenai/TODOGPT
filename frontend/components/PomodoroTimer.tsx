@@ -55,23 +55,26 @@ export function PomodoroTimer() {
   const pct = Math.round((1 - timeLeft / (phase === 'work' ? WORK_SECS : BREAK_SECS)) * 100);
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Focus Timer</h3>
-        <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-          phase === 'work' ? 'bg-red-900 text-red-300' : 'bg-blue-900 text-blue-300'
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="panel-header -mx-4 -mt-4 mb-4 px-4">
+        <h3 className="section-title">Focus Timer</h3>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+          phase === 'work'
+            ? 'bg-rose-950/60 text-rose-300 border border-rose-800/50'
+            : 'bg-sky-950/60 text-sky-300 border border-sky-800/50'
         }`}>
           {phase === 'work' ? 'Work' : 'Break'}
         </span>
       </div>
 
-      {/* Progress ring via border trick */}
-      <div className="text-5xl font-mono font-bold text-center text-white mb-1">
+      <div className="text-5xl font-mono font-bold text-center text-white mb-2 tabular-nums tracking-tight">
         {mins}:{secs}
       </div>
-      <div className="w-full bg-gray-800 rounded-full h-1 mb-4">
+      <div className="w-full bg-gray-800 rounded-full h-0.5 mb-4 overflow-hidden">
         <div
-          className={`h-1 rounded-full transition-all ${phase === 'work' ? 'bg-red-500' : 'bg-blue-500'}`}
+          className={`h-full rounded-full transition-all duration-1000 ${
+            phase === 'work' ? 'bg-rose-500' : 'bg-sky-500'
+          }`}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -79,18 +82,24 @@ export function PomodoroTimer() {
       <div className="flex gap-2">
         <button
           onClick={toggle}
-          className={`flex-1 py-2 rounded text-sm font-medium transition-colors ${
+          className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors ${
             running
-              ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
-              : 'bg-red-600 hover:bg-red-700 text-white'
+              ? 'bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-700/50'
+              : 'bg-rose-600 hover:bg-rose-700 text-white'
           }`}
         >
           {running ? 'Pause' : 'Start'}
         </button>
-        <button onClick={reset} className="px-3 py-2 rounded text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors">
+        <button
+          onClick={reset}
+          className="px-3 py-2 rounded-lg text-sm bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-gray-200 transition-colors"
+        >
           Reset
         </button>
-        <button onClick={skip} className="px-3 py-2 rounded text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors">
+        <button
+          onClick={skip}
+          className="px-3 py-2 rounded-lg text-sm bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-gray-200 transition-colors"
+        >
           Skip
         </button>
       </div>

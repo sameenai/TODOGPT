@@ -78,11 +78,16 @@ export function ScoreRow({ briefing }: { briefing: Briefing }) {
   return (
     <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-4">
       {cards.map(c => (
-        <div key={c.label} className={`bg-gray-900 border rounded-lg p-3 flex items-center gap-3 ${c.live ? 'border-gray-800' : 'border-gray-800/50'}`}>
-          <span className={`text-xl ${c.live ? '' : 'opacity-30'}`}>{c.icon}</span>
-          <div>
-            <div className={`text-xl font-bold ${c.color}`}>{c.value}</div>
-            <div className="text-xs text-gray-500">{c.label}</div>
+        <div
+          key={c.label}
+          className={`bg-gray-900 border rounded-xl p-3.5 flex items-center gap-3 transition-colors ${
+            c.live ? 'border-gray-800 hover:border-gray-700' : 'border-gray-800/40 opacity-60'
+          }`}
+        >
+          <span className="text-2xl leading-none flex-shrink-0">{c.icon}</span>
+          <div className="min-w-0">
+            <div className={`text-xl font-bold leading-tight ${c.color}`}>{c.value}</div>
+            <div className="text-xs text-gray-500 truncate mt-0.5">{c.label}</div>
           </div>
         </div>
       ))}

@@ -26,8 +26,8 @@ export function ConnectPrompt({ title, steps, configSnippet }: ConnectPromptProp
   return (
     <div className="p-4 space-y-4">
       {/* Header */}
-      <div className="flex items-center gap-2">
-        <div className="w-1.5 h-4 bg-amber-500 rounded-full flex-shrink-0" />
+      <div className="flex items-center gap-2.5">
+        <div className="w-1 h-5 bg-gradient-to-b from-amber-400 to-amber-600 rounded-full flex-shrink-0" />
         <span className="text-sm font-semibold text-gray-200">Connect {title}</span>
       </div>
 
@@ -35,16 +35,16 @@ export function ConnectPrompt({ title, steps, configSnippet }: ConnectPromptProp
       <ol className="space-y-2.5">
         {steps.map((s, i) => (
           <li key={i} className="flex items-start gap-3">
-            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-800 border border-gray-700 text-xs text-gray-400 flex items-center justify-center font-mono mt-0.5">
+            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-800 border border-gray-700 text-xs text-gray-500 flex items-center justify-center font-mono mt-0.5">
               {i + 1}
             </span>
-            <span className="text-sm text-gray-300 leading-snug">
+            <span className="text-xs text-gray-400 leading-relaxed">
               {s.url ? (
                 <a
                   href={s.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+                  className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 transition-colors"
                 >
                   {s.text} ↗
                 </a>
@@ -55,21 +55,21 @@ export function ConnectPrompt({ title, steps, configSnippet }: ConnectPromptProp
       </ol>
 
       {/* Config snippet */}
-      <div className="rounded-lg border border-gray-700 overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-1.5 bg-gray-800 border-b border-gray-700">
-          <code className="text-xs text-gray-400">~/.daily-briefing/config.json</code>
+      <div className="rounded-lg border border-gray-700/60 overflow-hidden">
+        <div className="flex items-center justify-between px-3 py-1.5 bg-gray-800/80 border-b border-gray-700/60">
+          <code className="text-xs text-gray-500">~/.daily-briefing/config.json</code>
           <button
             onClick={copy}
-            className="text-xs text-gray-400 hover:text-gray-200 transition-colors px-2 py-0.5 rounded hover:bg-gray-700"
+            className="text-xs text-gray-500 hover:text-gray-200 transition-colors px-2 py-0.5 rounded hover:bg-gray-700/60"
           >
             {copied ? '✓ copied' : 'copy'}
           </button>
         </div>
-        <pre className="text-xs text-green-300 bg-gray-950 p-3 overflow-x-auto leading-relaxed">{configSnippet}</pre>
+        <pre className="text-xs text-emerald-300/80 bg-gray-950 p-3 overflow-x-auto leading-relaxed">{configSnippet}</pre>
       </div>
 
       {/* Footer */}
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-gray-600">
         Restart the server after saving the config.
       </p>
     </div>

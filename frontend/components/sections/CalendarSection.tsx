@@ -11,33 +11,33 @@ export function CalendarSection({ events, isLive, isAvailable, fetchError }: {
   fetchError?: string;
 }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Calendar</h3>
+    <div className="panel">
+      <div className="panel-header">
+        <h3 className="section-title">Calendar</h3>
         <div className="flex items-center gap-2">
           <StatusBadge live={isLive} />
           {isLive && fetchError && <FetchErrorBanner error={fetchError} />}
           {isLive && (
-            <span className="text-xs font-bold bg-gray-800 text-gray-300 px-2 py-0.5 rounded">
+            <span className="text-xs font-bold bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full tabular-nums">
               {events?.length ?? 0}
             </span>
           )}
         </div>
       </div>
       {isLive ? (
-        <div className="divide-y divide-gray-800">
+        <div className="divide-y divide-gray-800/80">
           {!events?.length ? (
-            <div className="px-4 py-6 text-center text-gray-500 text-sm">No events today</div>
+            <div className="px-4 py-6 text-center text-gray-600 text-sm">No events today</div>
           ) : events.map(e => (
-            <div key={e.id} className="px-4 py-3">
+            <div key={e.id} className="px-4 py-3 hover:bg-gray-800/30 transition-colors">
               <div className="flex items-start justify-between gap-2">
                 <div className="text-sm font-medium text-gray-100">{e.title}</div>
-                <div className="text-xs text-gray-500 flex-shrink-0 font-mono">
+                <div className="text-xs text-gray-500 flex-shrink-0 font-mono tabular-nums">
                   {e.all_day ? 'all day' : formatTime(e.start_time)}
                 </div>
               </div>
               {(e.location || e.meeting_url) && (
-                <div className="text-xs text-gray-500 mt-0.5">
+                <div className="text-xs text-gray-600 mt-0.5">
                   {e.location || '(virtual)'}
                 </div>
               )}

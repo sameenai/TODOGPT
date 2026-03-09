@@ -12,30 +12,30 @@ const PRIORITY_COLOR: Record<string, string> = {
 
 export function JiraSection({ tickets, isLive, fetchError }: { tickets: JiraTicket[]; isLive?: boolean; fetchError?: string }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Jira</h3>
+    <div className="panel">
+      <div className="panel-header">
+        <h3 className="section-title">Jira</h3>
         <div className="flex items-center gap-2">
           <StatusBadge live={isLive} />
           {isLive && fetchError && <FetchErrorBanner error={fetchError} />}
           {isLive && (
-            <span className="text-xs font-bold bg-gray-800 text-gray-300 px-2 py-0.5 rounded">
+            <span className="text-xs font-bold bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full tabular-nums">
               {tickets?.length ?? 0}
             </span>
           )}
         </div>
       </div>
       {isLive ? (
-        <div className="divide-y divide-gray-800">
+        <div className="divide-y divide-gray-800/80">
           {!tickets?.length ? (
-            <div className="px-4 py-6 text-center text-gray-500 text-sm">No tickets</div>
+            <div className="px-4 py-6 text-center text-gray-600 text-sm">No tickets</div>
           ) : tickets.slice(0, 5).map(t => (
             <a
               key={t.key}
               href={t.url || '#'}
               target="_blank"
               rel="noopener noreferrer"
-              className="block px-4 py-3 hover:bg-gray-800 transition-colors"
+              className="block px-4 py-3 hover:bg-gray-800/40 transition-colors"
             >
               <div className="flex items-start gap-2">
                 <span className="text-xs text-gray-500 flex-shrink-0 mt-0.5 font-mono">{t.key}</span>

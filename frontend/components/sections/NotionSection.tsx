@@ -6,30 +6,30 @@ import { FetchErrorBanner } from '@/components/FetchErrorBanner';
 
 export function NotionSection({ pages, isLive, fetchError }: { pages: NotionPage[]; isLive?: boolean; fetchError?: string }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Notion</h3>
+    <div className="panel">
+      <div className="panel-header">
+        <h3 className="section-title">Notion</h3>
         <div className="flex items-center gap-2">
           <StatusBadge live={isLive} />
           {isLive && fetchError && <FetchErrorBanner error={fetchError} />}
           {isLive && (
-            <span className="text-xs font-bold bg-gray-800 text-gray-300 px-2 py-0.5 rounded">
+            <span className="text-xs font-bold bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full tabular-nums">
               {pages?.length ?? 0}
             </span>
           )}
         </div>
       </div>
       {isLive ? (
-        <div className="divide-y divide-gray-800">
+        <div className="divide-y divide-gray-800/80">
           {!pages?.length ? (
-            <div className="px-4 py-6 text-center text-gray-500 text-sm">No pages</div>
+            <div className="px-4 py-6 text-center text-gray-600 text-sm">No pages</div>
           ) : pages.slice(0, 5).map(p => (
             <a
               key={p.id}
               href={p.url || '#'}
               target="_blank"
               rel="noopener noreferrer"
-              className="block px-4 py-3 hover:bg-gray-800 transition-colors"
+              className="block px-4 py-3 hover:bg-gray-800/40 transition-colors"
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm text-gray-100 truncate">{p.title}</div>

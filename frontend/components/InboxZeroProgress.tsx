@@ -3,14 +3,16 @@ import type { Briefing } from '@/lib/types';
 function Bar({ label, pct, color }: { label: string; pct: number; color: string }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-xs text-gray-400 w-14 flex-shrink-0">{label}</span>
-      <div className="flex-1 bg-gray-800 rounded-full h-1.5">
+      <span className="text-xs text-gray-500 w-14 flex-shrink-0 font-medium">{label}</span>
+      <div className="flex-1 bg-gray-800/80 rounded-full h-1.5 overflow-hidden">
         <div
-          className={`h-1.5 rounded-full transition-all duration-500 ${color}`}
+          className={`h-full rounded-full transition-all duration-700 ease-out ${color}`}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className="text-xs text-gray-400 w-8 text-right flex-shrink-0">{pct}%</span>
+      <span className={`text-xs w-9 text-right flex-shrink-0 font-mono tabular-nums ${pct === 100 ? 'text-emerald-400' : 'text-gray-400'}`}>
+        {pct}%
+      </span>
     </div>
   );
 }
@@ -42,15 +44,13 @@ export function InboxZeroProgress({ briefing }: { briefing: Briefing }) {
   bars.push({ label: 'Tasks', pct: todoPct, color: todoPct >= 80 ? 'bg-green-500' : 'bg-cyan-500' });
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">
-        Focus Progress
-      </h3>
-      <div className="space-y-3">
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <h3 className="section-title mb-4">Focus Progress</h3>
+      <div className="space-y-3.5">
         {bars.map(b => <Bar key={b.label} label={b.label} pct={b.pct} color={b.color} />)}
       </div>
       {bars.length === 1 && (
-        <p className="text-xs text-gray-600 mt-3">Connect Email, Slack, or GitHub for more signals.</p>
+        <p className="text-xs text-gray-600 mt-4">Connect Email, Slack, or GitHub for more signals.</p>
       )}
     </div>
   );
