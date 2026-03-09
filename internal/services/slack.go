@@ -45,16 +45,7 @@ func (s *SlackService) Fetch() ([]models.SlackMessage, error) {
 		return msgs, nil
 	}
 
-	msgs, err := s.fetchFromAPI()
-	if err != nil {
-		s.mu.RLock()
-		cached := s.cache
-		s.mu.RUnlock()
-		if cached != nil {
-			return cached, nil
-		}
-		return s.mockMessages(), nil
-	}
+	msgs, _ := s.fetchFromAPI() // fetchFromAPI swallows per-channel errors; never errors itself
 
 	s.mu.Lock()
 	s.cache = msgs

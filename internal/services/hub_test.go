@@ -2,6 +2,7 @@ package services
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -226,5 +227,24 @@ func TestHubSlackUnread(t *testing.T) {
 
 	if briefing.SlackUnread == 0 {
 		t.Error("expected non-zero slack unread count")
+	}
+}
+
+func TestNewTodoServiceFallback(t *testing.T) {
+	// Force todo.NewStore to fail by placing a *file* where MkdirAll expects a
+	// directory (~/.daily-briefing).  We redirect HOME to a temp dir and create
+	// the blocking file before calling newTodoService with empty DataDir.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".daily-briefing"), []byte("blocker"), 0600); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	t.Setenv("HOME", dir)
+
+	cfg := config.DefaultConfig()
+	cfg.Server.DataDir = "" // empty → newTodoService sets storePath = ""
+
+	svc := newTodoService(cfg)
+	if svc == nil {
+		t.Fatal("expected non-nil fallback in-memory service")
 	}
 }
