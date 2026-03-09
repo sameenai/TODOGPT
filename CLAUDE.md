@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## General Guidelines
+
+- **Clarify ambiguous requests before acting.** If a request is short or unclear (e.g. `"tui"`, `"fix it"`, `"update the thing"`), ask what the user wants before creating files, starting large tasks, or making changes. Do not infer intent and proceed on a large task without confirmation.
+- Do not create new files unless they are clearly necessary for the task at hand.
+
 ## Commands
 
 ```bash
@@ -68,7 +73,7 @@ The app has three binaries sharing the same `internal/` packages:
 
 `golangci-lint` is configured in `.golangci.yml` with: `errcheck`, `govet`, `staticcheck`, `unused`, `ineffassign`, `gocritic`. Errors from `fmt.Printf`/`fmt.Println`/`http.ResponseWriter.Write` are excluded. Test files are excluded from `errcheck`.
 
-## Git workflow
+## Git & PR Workflow
 
 **NEVER commit directly to `main`.** Every change — no matter how small — must go through a separate branch, commit, and PR. Use the squash merge method when merging via the GitHub MCP tool.
 
@@ -87,6 +92,10 @@ git checkout main && git pull origin main
 git branch -d claude/<description>
 git push origin --delete claude/<description>
 ```
+
+- **Always create a feature branch first** — never push commits to `main` and then try to open a PR from it.
+- **After merging**, always: delete the remote branch (`git push origin --delete`), delete the local branch (`git branch -d`), and pull `main` to sync. Do this before starting the next task.
+- **Merge via the GitHub MCP tool** (`mcp__plugin_github_github__merge_pull_request` with `merge_method: squash`), not via `git merge` or the CLI.
 
 ### Commit quality standards
 
