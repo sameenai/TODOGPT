@@ -410,14 +410,20 @@ func (m model) View() string {
 	return strings.Join([]string{header, tabs, content, statusBar}, "\n")
 }
 
+// greetingForHour returns the appropriate time-of-day greeting.
+func greetingForHour(hour int) string {
+	if hour >= 12 && hour < 17 {
+		return "Good afternoon"
+	}
+	if hour >= 17 {
+		return "Good evening"
+	}
+	return "Good morning"
+}
+
 func (m model) viewHeader() string {
 	now := time.Now()
-	greeting := "Good morning"
-	if h := now.Hour(); h >= 12 && h < 17 {
-		greeting = "Good afternoon"
-	} else if h >= 17 {
-		greeting = "Good evening"
-	}
+	greeting := greetingForHour(now.Hour())
 
 	left := fmt.Sprintf("  %s! %s", greeting, now.Format("Monday, January 2"))
 	var right string

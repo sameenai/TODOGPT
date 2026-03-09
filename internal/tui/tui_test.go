@@ -1862,3 +1862,38 @@ func TestRenderTodosFilterTextInHeader(t *testing.T) {
 		t.Errorf("expected 'filtered:' in header when filterText set and todos match, got: %q", out)
 	}
 }
+
+// ── greetingForHour ───────────────────────────────────────────────────────────
+
+func TestGreetingForHour(t *testing.T) {
+	cases := []struct {
+		hour int
+		want string
+	}{
+		{0, "Good morning"},
+		{6, "Good morning"},
+		{11, "Good morning"},
+		{12, "Good afternoon"},
+		{15, "Good afternoon"},
+		{16, "Good afternoon"},
+		{17, "Good evening"},
+		{20, "Good evening"},
+		{23, "Good evening"},
+	}
+	for _, c := range cases {
+		if got := greetingForHour(c.hour); got != c.want {
+			t.Errorf("greetingForHour(%d) = %q, want %q", c.hour, got, c.want)
+		}
+	}
+}
+
+func TestViewHeaderNarrowWidth(t *testing.T) {
+	// width < content forces gap < 0 → clamped to 0 (no panic)
+	m := baseModel()
+	m.width = 5
+	m.lastFetch = time.Now()
+	h := m.viewHeader()
+	if h == "" {
+		t.Error("expected non-empty header even at very narrow width")
+	}
+}
