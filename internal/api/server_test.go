@@ -1236,3 +1236,33 @@ func TestHandleAuthGoogleDisconnectMethodNotAllowed(t *testing.T) {
 		t.Errorf("expected 405, got %d", w.Code)
 	}
 }
+
+func TestHandleTodoActionDeleteNotFound(t *testing.T) {
+	s := testServer(t)
+	go s.wsHub.Run()
+
+	req := httptest.NewRequest("DELETE", "/api/todos/nonexistent-id", nil)
+	w := httptest.NewRecorder()
+
+	s.handleTodoAction(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 when deleting non-existent todo, got %d", w.Code)
+	}
+}
+
+func TestHandleTodoActionUpdateNotFound(t *testing.T) {
+	s := testServer(t)
+	go s.wsHub.Run()
+
+	body := `{"title": "Updated"}`
+	req := httptest.NewRequest("PATCH", "/api/todos/nonexistent-id", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	s.handleTodoAction(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 when updating non-existent todo, got %d", w.Code)
+	}
+}

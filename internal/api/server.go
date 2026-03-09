@@ -264,7 +264,7 @@ func (s *Server) handleTodoAction(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		s.hub.Todos.Update(id, func(t *models.TodoItem) {
+		if !s.hub.Todos.Update(id, func(t *models.TodoItem) {
 			if updates.Title != nil {
 				t.Title = *updates.Title
 			}
@@ -287,7 +287,10 @@ func (s *Server) handleTodoAction(w http.ResponseWriter, r *http.Request) {
 			if updates.Recurring != nil {
 				t.Recurring = updates.Recurring
 			}
-		})
+		}) {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
 		s.wsHub.Broadcast(mustJSON(models.DashboardUpdate{Type: "todos_updated", Payload: s.hub.Todos.List()}))
 		// Return the updated todo
 		for _, t := range s.hub.Todos.List() {
@@ -298,7 +301,10 @@ func (s *Server) handleTodoAction(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(http.StatusOK)
 	case "DELETE":
-		s.hub.Todos.Delete(id)
+		if !s.hub.Todos.Delete(id) {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
 		s.wsHub.Broadcast(mustJSON(models.DashboardUpdate{Type: "todos_updated", Payload: s.hub.Todos.List()}))
 		w.WriteHeader(http.StatusNoContent)
 	default:
