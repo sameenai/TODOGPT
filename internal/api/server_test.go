@@ -1266,3 +1266,56 @@ func TestHandleTodoActionUpdateNotFound(t *testing.T) {
 		t.Errorf("expected 404 when updating non-existent todo, got %d", w.Code)
 	}
 }
+
+func TestSetDebug(t *testing.T) {
+	s := testServer(t)
+	if s.debug {
+		t.Fatal("debug should be false by default")
+	}
+	s.SetDebug(true)
+	if !s.debug {
+		t.Error("expected debug=true after SetDebug(true)")
+	}
+	s.SetDebug(false)
+	if s.debug {
+		t.Error("expected debug=false after SetDebug(false)")
+	}
+}
+
+func TestWithDebugLogging(t *testing.T) {
+	s := testServer(t)
+	called := false
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := s.withDebugLogging(inner)
+	req := httptest.NewRequest("GET", "/api/weather", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if !called {
+		t.Error("expected inner handler to be called")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestHandlerDebugMode(t *testing.T) {
+	s := testServer(t)
+	go s.wsHub.Run()
+	go s.bridgeUpdates()
+
+	s.SetDebug(true)
+	h := s.handler()
+
+	req := httptest.NewRequest("GET", "/api/weather", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 in debug mode, got %d", w.Code)
+	}
+}
