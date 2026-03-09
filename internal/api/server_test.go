@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -1317,5 +1318,101 @@ func TestHandlerDebugMode(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200 in debug mode, got %d", w.Code)
+	}
+}
+
+func TestHandleAuthGoogleCallbackSuccess(t *testing.T) {
+	// Mock OAuth2 token endpoint
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"access_token":"ya29.test","token_type":"Bearer","expires_in":3600,"refresh_token":"1//test"}`)
+	}))
+	defer tokenSrv.Close()
+
+	s := testServerWithGoogleAuth(t)
+	go s.wsHub.Run()
+	go s.bridgeUpdates()
+
+	// Point the oauth2 config at our mock token server
+	services.SetGoogleOAuthTokenURLForTest(s.hub.GoogleAuth, tokenSrv.URL+"/token")
+
+	// Generate a valid CSRF state
+	authURL := s.hub.GoogleAuth.AuthURL("")
+	parsed, err := url.Parse(authURL)
+	if err != nil {
+		t.Fatalf("parse authURL: %v", err)
+	}
+	state := parsed.Query().Get("state")
+
+	req := httptest.NewRequest("GET", "/api/auth/google/callback?code=valid-code&state="+state, nil)
+	w := httptest.NewRecorder()
+	s.handleAuthGoogleCallback(w, req)
+
+	if w.Code != http.StatusFound {
+		t.Errorf("expected 302 redirect on success, got %d", w.Code)
+	}
+	if !strings.Contains(w.Header().Get("Location"), "google=connected") {
+		t.Errorf("expected google=connected in redirect, got %q", w.Header().Get("Location"))
+	}
+}
+
+func TestHandleAuthGoogleCallbackSuccessWithReturnTo(t *testing.T) {
+	// Same as above but with a returnTo URL set via AuthURL
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"access_token":"ya29.test","token_type":"Bearer","expires_in":3600}`)
+	}))
+	defer tokenSrv.Close()
+
+	s := testServerWithGoogleAuth(t)
+	go s.wsHub.Run()
+	go s.bridgeUpdates()
+
+	services.SetGoogleOAuthTokenURLForTest(s.hub.GoogleAuth, tokenSrv.URL+"/token")
+
+	authURL := s.hub.GoogleAuth.AuthURL("http://localhost:3000")
+	parsed, _ := url.Parse(authURL)
+	state := parsed.Query().Get("state")
+
+	req := httptest.NewRequest("GET", "/api/auth/google/callback?code=valid-code&state="+state, nil)
+	w := httptest.NewRecorder()
+	s.handleAuthGoogleCallback(w, req)
+
+	if w.Code != http.StatusFound {
+		t.Errorf("expected 302, got %d", w.Code)
+	}
+	loc := w.Header().Get("Location")
+	if !strings.Contains(loc, "localhost:3000") {
+		t.Errorf("expected redirect to returnTo URL, got %q", loc)
+	}
+}
+
+func TestHandleAuthGoogleDisconnectError(t *testing.T) {
+	dir := t.TempDir()
+	// Write a valid token file so GoogleAuthService loads a non-nil token
+	tokenPath := dir + "/google-token.json"
+	tokenJSON := `{"access_token":"test","token_type":"Bearer","expiry":"2099-01-01T00:00:00Z"}`
+	if err := os.WriteFile(tokenPath, []byte(tokenJSON), 0600); err != nil {
+		t.Fatalf("write token file: %v", err)
+	}
+	// Make the directory read-only so os.Remove will fail
+	if err := os.Chmod(dir, 0555); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	defer os.Chmod(dir, 0755) //nolint:errcheck // restore for TempDir cleanup
+
+	cfg := config.DefaultConfig()
+	cfg.Google.ClientID = "test-client-id"
+	cfg.Google.ClientSecret = "test-client-secret"
+	cfg.Server.DataDir = dir
+	hub := services.NewHub(cfg)
+	s := NewServer(hub, "localhost", 8080)
+
+	req := httptest.NewRequest("POST", "/api/auth/google/disconnect", nil)
+	w := httptest.NewRecorder()
+	s.handleAuthGoogleDisconnect(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 when token file cannot be removed, got %d", w.Code)
 	}
 }

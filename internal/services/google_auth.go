@@ -172,3 +172,11 @@ func (g *GoogleAuthService) saveToken(token *oauth2.Token) error {
 	}
 	return os.WriteFile(g.tokenPath, data, 0600)
 }
+
+// SetGoogleOAuthTokenURLForTest overrides the OAuth2 token endpoint for test
+// helpers outside this package.  Only call this from test code.
+func SetGoogleOAuthTokenURLForTest(svc *GoogleAuthService, tokenURL string) {
+	if svc.oauthCfg != nil {
+		svc.oauthCfg.Endpoint.TokenURL = tokenURL
+	}
+}
